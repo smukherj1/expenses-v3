@@ -1,1 +1,7 @@
-<p>navbar works!</p>
+<mat-toolbar color="primary">
+    <mat-icon svgIcon="atm" aria-hidden="false" aria-label="ATM icon"></mat-icon>
+    <span class="ml-2">Expenses</span>
+    <span class="flex-1"></span>
+    <a mat-button routerLink="/" routerLinkActive="active-link" [routerLinkActiveOptions]="{exact: true}">Home</a>
+    <a mat-button routerLink="/manage" routerLinkActive="active-link">Manage</a>
+</mat-toolbar>
