@@ -1,0 +1,14 @@
+server:
+  port: 3000
+spring:
+  profiles:
+    active: dev # Default profile for local development.
+  application:
+    name: server
+  jpa:
+    hibernate:
+      ddl-auto: update
+  datasource:
+    url: jdbc:postgresql://expenses-db:5432/app
+    username: app
+    password: password

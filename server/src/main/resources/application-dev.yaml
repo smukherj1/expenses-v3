@@ -1,0 +1,7 @@
+# Profile when running Sprint Boot App locally for development directly with the db running in a postgres container.
+
+spring:
+ datasource:
+   url: jdbc:postgresql://localhost:5432/app
+   username: app
+   password: password

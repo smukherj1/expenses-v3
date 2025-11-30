@@ -5,10 +5,15 @@ set -eu
 
 function build_ui() {
     echo "Building expenses-ui image..."
-    docker build -f expenses-ui/Dockerfile -t ghcr.io/smukherj1/expenses/expenses-ui:latest expenses-ui
+    (cd expenses-ui && docker build -f Dockerfile -t ghcr.io/smukherj1/expenses/expenses-ui:latest .)
 }
 
-components=("ui")
+function build_server() {
+    echo "Building expenses-server image..."
+    (cd server && ./build_image.sh)
+}
+
+components=("ui" "server")
 
 if [ $# -eq 0 ]; then
     targets=("all")

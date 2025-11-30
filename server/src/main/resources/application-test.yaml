@@ -1,0 +1,8 @@
+# Profile when running the Spring App locally as a Docker container for
+# testing.
+
+spring:
+  datasource:
+    url: jdbc:postgresql://expenses-db:5432/app
+    username: app
+    password: password
