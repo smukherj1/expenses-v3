@@ -21,6 +21,7 @@ public class Transaction {
     private LocalDate date;
     @Getter
     private String description;
+    @Getter
     private BigDecimal amount;
     @Getter
     private String institution;
