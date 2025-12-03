@@ -1,7 +1,8 @@
 package com.github.smukherj1.expenses.server.controllers;
 
+import com.github.smukherj1.expenses.server.api.Transaction;
 import com.github.smukherj1.expenses.server.controllers.errors.BadRequestException;
-import com.github.smukherj1.expenses.server.models.Transaction;
+import com.github.smukherj1.expenses.server.models.TransactionModel;
 import com.github.smukherj1.expenses.server.models.TransactionSpecs;
 import com.github.smukherj1.expenses.server.models.TransactionStore;
 import org.slf4j.Logger;
@@ -26,13 +27,17 @@ public class TransactionsController {
                 criteria.getFromDate(), criteria.getToDate(), criteria.getDescription(), criteria.getFromAmount(), criteria.getToAmount(),
                 criteria.getInstitution(), criteria.getTag()
                 );
-        return this.transactionStore.findAll(TransactionSpecs.search(criteria));
+        return txnsModelsToAPI(this.transactionStore.findAll(TransactionSpecs.search(criteria)));
     }
 
     @PostMapping("/transactions")
     public List<Transaction> postTransactions(@RequestBody List<Transaction> newTransactions) {
         validateTransactionsForCreation(newTransactions);
-        return this.transactionStore.saveAll(newTransactions);
+
+        var addedTxnModels = this.transactionStore.saveAll(
+                txnsAPIToModels(newTransactions)
+        );
+        return txnsModelsToAPI(addedTxnModels);
     }
 
     @DeleteMapping("/transactions")
@@ -40,7 +45,27 @@ public class TransactionsController {
         this.transactionStore.deleteAll();
     }
 
+    private static List<TransactionModel> txnsAPIToModels(List<Transaction> txns) {
+        return txns.stream().map(TransactionModel::new).toList();
+    }
+
+    private static List<Transaction> txnsModelsToAPI(List<TransactionModel> tms) {
+        logger.info("TxnsModelsToAPI: {} transactions", tms.size());
+        return tms.stream().map(t -> {
+            return new Transaction(
+                    t.getId(),
+                    t.getDate(),
+                    t.getDescription(),
+                    t.getAmount(),
+                    t.getInstitution(),
+                    t.getTag());
+        }).toList();
+    }
+
     private static void validateTransactionForCreation(int index, Transaction t) {
+        if (t.getId() != null) {
+            throw new BadRequestException(String.format("[%d] id can't be set", index));
+        }
         if (t.getDate() == null) {
             throw new BadRequestException(String.format("[%d] date is null", index));
         }

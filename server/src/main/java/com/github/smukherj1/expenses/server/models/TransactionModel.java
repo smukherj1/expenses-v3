@@ -1,5 +1,6 @@
 package com.github.smukherj1.expenses.server.models;
 
+import com.github.smukherj1.expenses.server.api.Transaction;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -8,35 +9,40 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Entity
-public class Transaction {
+public class TransactionModel {
 
     @Getter
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
+
     @Getter
-    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy/MM/dd")
     private LocalDate date;
+
     @Getter
     private String description;
+
     @Getter
     private BigDecimal amount;
+
     @Getter
     private String institution;
+
     @Getter
     private String tag;
 
-    protected Transaction() {
+    protected TransactionModel() {
     }
 
-    public Transaction(LocalDate date, String description, BigDecimal amount, String institution, String tag) {
-        this.date = date;
-        this.description = description;
-        this.amount = amount;
-        this.institution = institution;
-        this.tag = tag;
+    public TransactionModel(Transaction t) {
+        this.date = t.getDate();
+        this.description = t.getDescription();
+        this.amount = t.getAmount();
+        this.institution = t.getInstitution();
+        this.tag = t.getTag();
     }
 
     @Override
@@ -44,5 +50,4 @@ public class Transaction {
         return String.format("Txn[id=%d, date=%s, desc=%s, amt=%f, src=%s, tag=%s]",
                 this.id, this.date.toString(), this.description, this.amount, this.institution, this.tag);
     }
-
 }
