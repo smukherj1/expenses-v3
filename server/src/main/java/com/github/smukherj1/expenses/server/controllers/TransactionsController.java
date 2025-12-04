@@ -25,10 +25,11 @@ public class TransactionsController {
 
     @GetMapping("/transactions")
     public List<Transaction> getTransactions(@Valid TransactionSearchCriteria criteria) {
-        logger.info("GET /transactions: fromDate={}, toDate={}, description={}, fromAmount={}, toAmount={}, institution={}, tag={}",
-                criteria.getFromDate(), criteria.getToDate(), criteria.getDescription(), criteria.getFromAmount(), criteria.getToAmount(),
-                criteria.getInstitution(), criteria.getTag()
-                );
+        logger.info(
+                "GET /transactions: fromDate={}, toDate={}, description={}, fromAmount={}, toAmount={}, institution={}, tag={}",
+                criteria.getFromDate(), criteria.getToDate(), criteria.getDescription(), criteria.getFromAmount(),
+                criteria.getToAmount(),
+                criteria.getInstitution(), criteria.getTag());
         return txnsModelsToAPI(this.transactionStore.findAll(TransactionSpecs.search(criteria)));
     }
 
@@ -37,8 +38,7 @@ public class TransactionsController {
         validateTransactionsForCreation(newTransactions);
 
         var addedTxnModels = this.transactionStore.saveAll(
-                txnsAPIToModels(newTransactions)
-        );
+                txnsAPIToModels(newTransactions));
         return txnsModelsToAPI(addedTxnModels);
     }
 
@@ -73,15 +73,27 @@ public class TransactionsController {
         }
         if (t.getDescription() == null) {
             throw new BadRequestException(String.format("[%d] description is null", index));
+        } else if (t.getDescription().length() == 0 || t.getDescription().length() > 100) {
+            throw new BadRequestException(
+                    String.format("[%d] description must be between 1 and 100 characters, got %d characters", index,
+                            t.getDescription().length()));
         }
         if (t.getInstitution() == null) {
             throw new BadRequestException(String.format("[%d] institution is null", index));
+        } else if (t.getInstitution().length() == 0 || t.getInstitution().length() > 100) {
+            throw new BadRequestException(
+                    String.format("[%d] institution must be between 1 and 100 characters, got %d characters", index,
+                            t.getInstitution().length()));
         }
         if (t.getAmount() == null) {
             throw new BadRequestException(String.format("[%d] amount is null", index));
         }
         if (t.getTag() == null) {
             throw new BadRequestException(String.format("[%d] tag is null", index));
+        } else if (t.getTag().length() == 0 || t.getTag().length() > 100) {
+            throw new BadRequestException(
+                    String.format("[%d] tag must be between 1 and 100 characters, got %d characters", index,
+                            t.getTag().length()));
         }
     }
 
