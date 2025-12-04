@@ -43,6 +43,7 @@ public class TransactionSpecs {
                 predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("tag")),
                         "%" + criteria.getTag().toLowerCase() + "%"));
             }
+            query.orderBy(criteriaBuilder.asc(root.get("date")), criteriaBuilder.asc(root.get("id")));
             return criteriaBuilder.and(predicates);
         };
     }

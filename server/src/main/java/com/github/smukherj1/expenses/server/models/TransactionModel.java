@@ -1,17 +1,16 @@
 package com.github.smukherj1.expenses.server.models;
 
 import com.github.smukherj1.expenses.server.api.Transaction;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 
 @Entity
+@Table(indexes = {
+        @Index(name = "date_index", columnList = "date")
+})
 public class TransactionModel {
 
     @Getter
