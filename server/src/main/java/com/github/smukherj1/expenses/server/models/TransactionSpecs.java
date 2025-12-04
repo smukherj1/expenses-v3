@@ -1,11 +1,8 @@
 package com.github.smukherj1.expenses.server.models;
 
+import com.github.smukherj1.expenses.server.api.TransactionSearchCriteria;
 import jakarta.persistence.criteria.Predicate;
-import lombok.Getter;
-import lombok.Setter;
 import org.springframework.data.jpa.domain.Specification;
-
-import org.springframework.format.annotation.DateTimeFormat;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -13,69 +10,38 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TransactionSpecs {
-    public static class SearchCriteria {
-        @Getter
-        @Setter
-        @DateTimeFormat(pattern = "yyyy/MM/dd")
-        LocalDate fromDate;
 
-        @Getter
-        @Setter
-        @DateTimeFormat(pattern = "yyyy/MM/dd")
-        LocalDate toDate;
-
-        @Getter
-        @Setter
-        String description;
-
-        @Getter
-        @Setter
-        BigDecimal fromAmount;
-
-        @Getter
-        @Setter
-        BigDecimal toAmount;
-
-        @Getter
-        @Setter
-        String institution;
-
-        @Getter
-        @Setter
-        String tag;
-    }
-
-    public static Specification<TransactionModel> search(SearchCriteria criteria) {
+    public static Specification<TransactionModel> search(TransactionSearchCriteria criteria) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
-            if (criteria.fromDate != null) {
+            if (criteria.getFromDate() != null) {
                 predicates
                         .add(criteriaBuilder.greaterThanOrEqualTo(root.get("date").as(LocalDate.class),
-                                criteria.fromDate));
+                                criteria.getFromDate()));
             }
-            if (criteria.toDate != null) {
+            if (criteria.getToDate() != null) {
                 predicates.add(
-                        criteriaBuilder.lessThanOrEqualTo(root.get("date").as(LocalDate.class), criteria.toDate));
+                        criteriaBuilder.lessThanOrEqualTo(root.get("date").as(LocalDate.class), criteria.getToDate()));
             }
-            if (criteria.description != null) {
+            if (criteria.getDescription() != null) {
                 predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("description")),
-                        "%" + criteria.description.toLowerCase() + "%"));
+                        "%" + criteria.getDescription().toLowerCase() + "%"));
             }
-            if (criteria.fromAmount != null) {
+            if (criteria.getFromAmount() != null) {
                 predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("amount").as(BigDecimal.class),
-                        criteria.fromAmount));
+                        criteria.getFromAmount()));
             }
-            if (criteria.toAmount != null) {
+            if (criteria.getToAmount() != null) {
                 predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("amount").as(BigDecimal.class),
-                        criteria.toAmount));
+                        criteria.getToAmount()));
             }
-            if (criteria.institution != null) {
+            if (criteria.getInstitution() != null) {
                 predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("institution")),
-                        "%" + criteria.institution.toLowerCase() + "%"));
+                        "%" + criteria.getInstitution().toLowerCase() + "%"));
             }
-            if (criteria.tag != null) {
+            if (criteria.getTag() != null) {
                 predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("tag")),
-                        "%" + criteria.tag.toLowerCase() + "%"));
+                        "%" + criteria.getTag().toLowerCase() + "%"));
             }
             return criteriaBuilder.and(predicates);
         };

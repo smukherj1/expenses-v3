@@ -1,10 +1,12 @@
 package com.github.smukherj1.expenses.server.controllers;
 
+import com.github.smukherj1.expenses.server.api.TransactionSearchCriteria;
 import com.github.smukherj1.expenses.server.api.Transaction;
 import com.github.smukherj1.expenses.server.controllers.errors.BadRequestException;
 import com.github.smukherj1.expenses.server.models.TransactionModel;
 import com.github.smukherj1.expenses.server.models.TransactionSpecs;
 import com.github.smukherj1.expenses.server.models.TransactionStore;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
@@ -22,7 +24,7 @@ public class TransactionsController {
     }
 
     @GetMapping("/transactions")
-    public List<Transaction> getTransactions(TransactionSpecs.SearchCriteria criteria) {
+    public List<Transaction> getTransactions(@Valid TransactionSearchCriteria criteria) {
         logger.info("GET /transactions: fromDate={}, toDate={}, description={}, fromAmount={}, toAmount={}, institution={}, tag={}",
                 criteria.getFromDate(), criteria.getToDate(), criteria.getDescription(), criteria.getFromAmount(), criteria.getToAmount(),
                 criteria.getInstitution(), criteria.getTag()
