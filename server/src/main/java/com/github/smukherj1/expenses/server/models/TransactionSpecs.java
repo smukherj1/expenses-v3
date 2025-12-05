@@ -1,7 +1,8 @@
 package com.github.smukherj1.expenses.server.models;
 
-import com.github.smukherj1.expenses.server.api.TransactionSearchCriteria;
+import com.github.smukherj1.expenses.server.api.TransactionSearchRequest;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
@@ -11,7 +12,7 @@ import java.util.List;
 
 public class TransactionSpecs {
 
-    public static Specification<TransactionModel> search(TransactionSearchCriteria criteria) {
+    public static Specification<TransactionModel> search(TransactionSearchRequest criteria) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (criteria.getFromDate() != null) {
@@ -43,8 +44,11 @@ public class TransactionSpecs {
                 predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("tag")),
                         "%" + criteria.getTag().toLowerCase() + "%"));
             }
-            query.orderBy(criteriaBuilder.asc(root.get("date")), criteriaBuilder.asc(root.get("id")));
             return criteriaBuilder.and(predicates);
         };
+    }
+
+    public static Sort scrollOrder() {
+        return Sort.by(Sort.Order.asc("date"), Sort.Order.asc("id"));
     }
 }

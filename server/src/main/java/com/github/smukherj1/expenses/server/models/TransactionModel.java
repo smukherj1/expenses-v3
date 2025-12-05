@@ -2,6 +2,7 @@ package com.github.smukherj1.expenses.server.models;
 
 import com.github.smukherj1.expenses.server.api.Transaction;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 
 import java.math.BigDecimal;
@@ -16,18 +17,27 @@ public class TransactionModel {
     @Getter
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
+    @Column(nullable = false)
     private Long id;
 
     @Getter
+    @NotNull
+    @Column(nullable = false)
     private LocalDate date;
 
     @Getter
+    @NotNull
+    @Column(nullable = false)
     private String description;
 
     @Getter
+    @NotNull
+    @Column(nullable = false)
     private BigDecimal amount;
 
     @Getter
+    @NotNull
+    @Column(nullable = false)
     private String institution;
 
     @Getter

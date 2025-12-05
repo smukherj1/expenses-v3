@@ -1,14 +1,19 @@
 package com.github.smukherj1.expenses.server.controllers;
 
-import com.github.smukherj1.expenses.server.api.TransactionSearchCriteria;
+import com.github.smukherj1.expenses.server.api.TransactionSearchRequest;
 import com.github.smukherj1.expenses.server.api.Transaction;
+import com.github.smukherj1.expenses.server.api.TransactionSearchResult;
 import com.github.smukherj1.expenses.server.controllers.errors.BadRequestException;
 import com.github.smukherj1.expenses.server.models.TransactionModel;
 import com.github.smukherj1.expenses.server.models.TransactionSpecs;
 import com.github.smukherj1.expenses.server.models.TransactionStore;
+import com.github.smukherj1.expenses.server.services.KeysetScrollPositionService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.KeysetScrollPosition;
+import org.springframework.data.domain.ScrollPosition;
+import org.springframework.data.domain.Window;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,19 +23,68 @@ import java.util.stream.IntStream;
 public class TransactionsController {
     private static final Logger logger = LoggerFactory.getLogger(TransactionsController.class);
     private final TransactionStore transactionStore;
+    private final KeysetScrollPositionService scrollPositionService;
 
-    TransactionsController(TransactionStore transactionStore) {
+    TransactionsController(
+            TransactionStore transactionStore,
+            KeysetScrollPositionService keysetScrollPositionService
+            ) {
         this.transactionStore = transactionStore;
+        this.scrollPositionService = keysetScrollPositionService;
     }
 
     @GetMapping("/transactions")
-    public List<Transaction> getTransactions(@Valid TransactionSearchCriteria criteria) {
+    public TransactionSearchResult getTransactions(@Valid TransactionSearchRequest request) {
         logger.info(
-                "GET /transactions: fromDate={}, toDate={}, description={}, fromAmount={}, toAmount={}, institution={}, tag={}",
-                criteria.getFromDate(), criteria.getToDate(), criteria.getDescription(), criteria.getFromAmount(),
-                criteria.getToAmount(),
-                criteria.getInstitution(), criteria.getTag());
-        return txnsModelsToAPI(this.transactionStore.findAll(TransactionSpecs.search(criteria)));
+                "GET /transactions: fromDate={}, toDate={}, description={}, fromAmount={}, toAmount={}, institution={}, tag={}, nextToken={}",
+                request.getFromDate(), request.getToDate(), request.getDescription(), request.getFromAmount(),
+                request.getToAmount(),
+                request.getInstitution(), request.getTag(), request.getNextPageToken());
+        // Build DB query from request.
+        var spec = TransactionSpecs.search(request);
+        var pageSize = request.getPageSize() == null ? 50 : request.getPageSize();
+        ScrollPosition pos;
+        try {
+            pos = scrollPositionService.decode(request.getNextPageToken());
+        } catch (RuntimeException e) {
+            throw new BadRequestException(String.format("Invalid nextToken: %s", e.getMessage()));
+        }
+
+        // Query DB.
+        var window = transactionStore.findBy(
+                spec,
+                q -> q.sortBy(
+                        TransactionSpecs.scrollOrder()).limit(pageSize).scroll(pos));
+
+        // Process query results and create response.
+        return windowToSearchResult(window);
+    }
+
+    private TransactionSearchResult windowToSearchResult(Window<TransactionModel> w) {
+        var transactions = w.stream().map(tm -> {
+            return new Transaction(tm.getId(),
+                    tm.getDate(),
+                    tm.getDescription(),
+                    tm.getAmount(),
+                    tm.getInstitution(),
+                    tm.getTag());
+        }).toList();
+        if(!w.hasNext()) {
+            return new TransactionSearchResult(transactions, null);
+        }
+        ScrollPosition last = w.positionAt(w.size() - 1);
+        if(!(last instanceof KeysetScrollPosition)) {
+            logger.error("Got query results with cursor of type {} that's not a KeysetScrollPosition", last.getClass().getName());
+        }
+        KeysetScrollPosition lastKSP = (KeysetScrollPosition) last;
+        try {
+            return new TransactionSearchResult(
+                    transactions,
+                    scrollPositionService.encode(lastKSP));
+        } catch (RuntimeException e) {
+            logger.error("Error encoding scroll position to nextPageToken string: {}", e.getMessage());
+        }
+        return new TransactionSearchResult(transactions, null);
     }
 
     @PostMapping("/transactions")

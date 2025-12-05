@@ -1,6 +1,6 @@
 package com.github.smukherj1.expenses.server.api;
 
-import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.Getter;
 import lombok.Setter;
@@ -10,7 +10,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public class TransactionSearchCriteria {
+public class TransactionSearchRequest {
     @Getter
     @Setter
     @DateTimeFormat(pattern = "yyyy/MM/dd")
@@ -43,4 +43,14 @@ public class TransactionSearchCriteria {
     @Setter
     @Size(min = 1, max = 100)
     String tag;
+
+    @Getter
+    @Setter
+    @Min(1)
+    @Max(1000)
+    Integer pageSize;
+
+    @Getter
+    @Setter
+    String nextPageToken;
 }
