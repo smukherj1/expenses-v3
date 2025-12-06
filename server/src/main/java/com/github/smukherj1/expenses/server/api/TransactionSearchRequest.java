@@ -52,5 +52,5 @@ public class TransactionSearchRequest {
 
     @Getter
     @Setter
-    String nextPageToken;
+    String pageToken;
 }

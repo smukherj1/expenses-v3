@@ -36,18 +36,18 @@ public class TransactionsController {
     @GetMapping("/transactions")
     public TransactionSearchResult getTransactions(@Valid TransactionSearchRequest request) {
         logger.info(
-                "GET /transactions: fromDate={}, toDate={}, description={}, fromAmount={}, toAmount={}, institution={}, tag={}, nextToken={}",
+                "GET /transactions: fromDate={}, toDate={}, description={}, fromAmount={}, toAmount={}, institution={}, tag={}, pageToken={}",
                 request.getFromDate(), request.getToDate(), request.getDescription(), request.getFromAmount(),
                 request.getToAmount(),
-                request.getInstitution(), request.getTag(), request.getNextPageToken());
+                request.getInstitution(), request.getTag(), request.getPageToken());
         // Build DB query from request.
         var spec = TransactionSpecs.search(request);
         var pageSize = request.getPageSize() == null ? 50 : request.getPageSize();
         ScrollPosition pos;
         try {
-            pos = scrollPositionService.decode(request.getNextPageToken());
+            pos = scrollPositionService.decode(request.getPageToken());
         } catch (RuntimeException e) {
-            throw new BadRequestException(String.format("Invalid nextToken: %s", e.getMessage()));
+            throw new BadRequestException(String.format("Invalid pageToken: %s", e.getMessage()));
         }
 
         // Query DB.
