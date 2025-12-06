@@ -9,7 +9,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-29"),
         description: "Walmart Supercentre",
         amount: 60.71,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries",
     },
     {
@@ -18,7 +18,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-28"),
         description: "Shawarma Palace",
         amount: 12.71,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
 
@@ -31,7 +31,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-01"),
         description: "Monthly Rent Payment",
         amount: 1850.00,
-        source: "Checking",
+        institution: "Checking",
         tag: "rent",
     },
     {
@@ -40,7 +40,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-04"),
         description: "Auto Insurance Premium",
         amount: 165.50,
-        source: "Checking",
+        institution: "Checking",
         tag: "insurance",
     },
     {
@@ -49,7 +49,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-07"),
         description: "Hydro/Electricity Bill",
         amount: 98.45,
-        source: "Checking",
+        institution: "Checking",
         tag: "utilities",
     },
     {
@@ -58,7 +58,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-07"),
         description: "Internet & TV Service",
         amount: 125.00,
-        source: "Checking",
+        institution: "Checking",
         tag: "utilities",
     },
     {
@@ -67,7 +67,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-10"),
         description: "Student Loan Payment",
         amount: 350.00,
-        source: "Checking",
+        institution: "Checking",
         tag: "debt",
     },
     {
@@ -76,7 +76,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-15"),
         description: "Cell Phone Bill",
         amount: 75.00,
-        source: "Checking",
+        institution: "Checking",
         tag: "utilities",
     },
     {
@@ -85,7 +85,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-20"),
         description: "Gas Utility Bill",
         amount: 42.10,
-        source: "Checking",
+        institution: "Checking",
         tag: "utilities",
     },
     {
@@ -94,7 +94,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-25"),
         description: "Renter's Insurance",
         amount: 18.99,
-        source: "Checking",
+        institution: "Checking",
         tag: "insurance",
     },
 
@@ -105,7 +105,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-02"),
         description: "Esso Gas Station",
         amount: 55.25,
-        source: "VISA",
+        institution: "VISA",
         tag: "gas",
     },
     {
@@ -114,7 +114,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-09"),
         description: "Shell Gas Station",
         amount: 60.15,
-        source: "VISA",
+        institution: "VISA",
         tag: "gas",
     },
     {
@@ -123,7 +123,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-16"),
         description: "Oil Change Service",
         amount: 79.99,
-        source: "VISA",
+        institution: "VISA",
         tag: "auto_maintenance",
     },
     {
@@ -132,7 +132,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-21"),
         description: "Petro-Canada",
         amount: 58.70,
-        source: "VISA",
+        institution: "VISA",
         tag: "gas",
     },
     {
@@ -141,7 +141,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-26"),
         description: "Car Wash Token",
         amount: 12.00,
-        source: "VISA",
+        institution: "VISA",
         tag: "auto_maintenance",
     },
 
@@ -152,7 +152,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-03"),
         description: "No Frills Groceries",
         amount: 45.88,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries",
     },
     {
@@ -161,7 +161,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-05"),
         description: "Coffee Shop - Morning Latte",
         amount: 4.50,
-        source: "VISA",
+        institution: "VISA",
         tag: "coffee",
     },
     {
@@ -170,7 +170,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-06"),
         description: "Local Pizzeria",
         amount: 28.50,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
     {
@@ -179,7 +179,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-08"),
         description: "Costco Bulk Buy",
         amount: 185.32,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries",
     },
     {
@@ -188,7 +188,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-10"),
         description: "Tim Hortons",
         amount: 6.85,
-        source: "VISA",
+        institution: "VISA",
         tag: "coffee",
     },
     {
@@ -197,7 +197,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-11"),
         description: "Lunch Sandwich Shop",
         amount: 15.25,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
     {
@@ -206,7 +206,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-13"),
         description: "Food Basics",
         amount: 32.19,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries",
     },
     {
@@ -215,7 +215,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-14"),
         description: "Starbucks",
         amount: 5.10,
-        source: "VISA",
+        institution: "VISA",
         tag: "coffee",
     },
     {
@@ -224,7 +224,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-15"),
         description: "Dinner at Thai Place",
         amount: 55.00,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
     {
@@ -233,7 +233,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-17"),
         description: "Loblaws Groceries",
         amount: 78.41,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries",
     },
     {
@@ -242,7 +242,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-19"),
         description: "Uber Eats Delivery",
         amount: 38.90,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
     {
@@ -251,7 +251,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-20"),
         description: "Bulk Barn Baking Supplies",
         amount: 18.55,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries",
     },
     {
@@ -260,7 +260,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-22"),
         description: "Weekend Brunch",
         amount: 42.00,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
     {
@@ -269,7 +269,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-24"),
         description: "Sobeys Express",
         amount: 22.10,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries",
     },
     {
@@ -278,7 +278,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-27"),
         description: "McDonald's Drive Thru",
         amount: 9.60,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
 
@@ -289,7 +289,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-01"),
         description: "Netflix Subscription",
         amount: 16.99,
-        source: "VISA",
+        institution: "VISA",
         tag: "subscription",
     },
     {
@@ -298,7 +298,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-05"),
         description: "Spotify Premium",
         amount: 10.99,
-        source: "VISA",
+        institution: "VISA",
         tag: "subscription",
     },
     {
@@ -307,7 +307,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-12"),
         description: "Movie Tickets",
         amount: 28.00,
-        source: "VISA",
+        institution: "VISA",
         tag: "entertainment",
     },
     {
@@ -316,7 +316,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-18"),
         description: "Video Game Purchase (Online)",
         amount: 79.99,
-        source: "VISA",
+        institution: "VISA",
         tag: "entertainment",
     },
 
@@ -327,7 +327,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-04"),
         description: "Amazon Order - Toiletries",
         amount: 45.60,
-        source: "VISA",
+        institution: "VISA",
         tag: "shopping",
     },
     {
@@ -336,7 +336,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-10"),
         description: "Local Hardware Store - Tools",
         amount: 112.50,
-        source: "VISA",
+        institution: "VISA",
         tag: "home_maintenance",
     },
     {
@@ -345,7 +345,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-23"),
         description: "Clothes Shopping - Jacket",
         amount: 95.00,
-        source: "VISA",
+        institution: "VISA",
         tag: "shopping",
     },
     {
@@ -354,7 +354,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-29"),
         description: "Black Friday Electronics",
         amount: 350.00,
-        source: "VISA",
+        institution: "VISA",
         tag: "shopping",
     },
     {
@@ -363,7 +363,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-30"),
         description: "Donation to Charity",
         amount: 25.00,
-        source: "Checking",
+        institution: "Checking",
         tag: "charity",
     },
 
@@ -374,7 +374,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-01"),
         description: "Local Deli",
         amount: 18.20,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
     {
@@ -383,7 +383,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-02"),
         description: "Fresh Market Produce",
         amount: 33.75,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries",
     },
     {
@@ -392,7 +392,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-03"),
         description: "Starbucks Refill",
         amount: 4.80,
-        source: "VISA",
+        institution: "VISA",
         tag: "coffee",
     },
     {
@@ -401,7 +401,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-04"),
         description: "Pizza Hut",
         amount: 22.99,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
     {
@@ -410,7 +410,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-05"),
         description: "Pioneer Gas Station",
         amount: 48.50,
-        source: "VISA",
+        institution: "VISA",
         tag: "gas",
     },
     {
@@ -419,7 +419,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-06"),
         description: "Shoppers Drug Mart",
         amount: 15.45,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries",
     },
     {
@@ -428,7 +428,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-07"),
         description: "Pub Night Drinks",
         amount: 35.00,
-        source: "VISA",
+        institution: "VISA",
         tag: "entertainment",
     },
     {
@@ -437,7 +437,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-08"),
         description: "Subway Lunch",
         amount: 11.50,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
     {
@@ -446,7 +446,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-09"),
         description: "Home Depot Supplies",
         amount: 55.70,
-        source: "VISA",
+        institution: "VISA",
         tag: "home_maintenance",
     },
     {
@@ -455,7 +455,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-10"),
         description: "T&T Supermarket",
         amount: 68.30,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries",
     },
     {
@@ -464,7 +464,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-11"),
         description: "Quick Stop Coffee",
         amount: 3.50,
-        source: "VISA",
+        institution: "VISA",
         tag: "coffee",
     },
     {
@@ -473,7 +473,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-12"),
         description: "Cineplex Popcorn/Soda",
         amount: 18.00,
-        source: "VISA",
+        institution: "VISA",
         tag: "entertainment",
     },
     {
@@ -482,7 +482,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-13"),
         description: "Shell Gas Station",
         amount: 62.10,
-        source: "VISA",
+        institution: "VISA",
         tag: "gas",
     },
     {
@@ -491,7 +491,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-14"),
         description: "Sushi Takeout",
         amount: 30.50,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
     {
@@ -500,7 +500,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-15"),
         description: "Pet Food Store",
         amount: 49.99,
-        source: "VISA",
+        institution: "VISA",
         tag: "pet_care",
     },
     {
@@ -509,7 +509,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-16"),
         description: "Farmers Market",
         amount: 28.00,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries",
     },
     {
@@ -518,7 +518,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-17"),
         description: "Bus Pass Purchase",
         amount: 90.00,
-        source: "Checking",
+        institution: "Checking",
         tag: "transportation",
     },
     {
@@ -527,7 +527,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-18"),
         description: "Gym Membership Fee",
         amount: 45.00,
-        source: "Checking",
+        institution: "Checking",
         tag: "health",
     },
     {
@@ -536,7 +536,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-19"),
         description: "Wendy's Lunch",
         amount: 14.80,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
     {
@@ -545,7 +545,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-20"),
         description: "Walmart Grocery Pickup",
         amount: 88.63,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries",
     },
     {
@@ -554,7 +554,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-21"),
         description: "Espresso Bar",
         amount: 5.50,
-        source: "VISA",
+        institution: "VISA",
         tag: "coffee",
     },
     {
@@ -563,7 +563,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-22"),
         description: "Esso Gas Station",
         amount: 54.90,
-        source: "VISA",
+        institution: "VISA",
         tag: "gas",
     },
     {
@@ -572,7 +572,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-23"),
         description: "Book Store Purchase",
         amount: 22.00,
-        source: "VISA",
+        institution: "VISA",
         tag: "shopping",
     },
     {
@@ -581,7 +581,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-24"),
         description: "Hair Salon Visit",
         amount: 65.00,
-        source: "VISA",
+        institution: "VISA",
         tag: "personal_care",
     },
     {
@@ -590,7 +590,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-25"),
         description: "Amazon Prime Video Rental",
         amount: 5.99,
-        source: "VISA",
+        institution: "VISA",
         tag: "entertainment",
     },
     {
@@ -599,7 +599,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-26"),
         description: "Drug Store Medicine",
         amount: 14.75,
-        source: "VISA",
+        institution: "VISA",
         tag: "health",
     },
     {
@@ -608,7 +608,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-27"),
         description: "The Beer Store",
         amount: 25.50,
-        source: "VISA",
+        institution: "VISA",
         tag: "groceries", // Or "alcohol" if you use that tag
     },
     {
@@ -617,7 +617,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-28"),
         description: "Starbucks Treat",
         amount: 6.20,
-        source: "VISA",
+        institution: "VISA",
         tag: "coffee",
     },
     {
@@ -626,7 +626,7 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-29"),
         description: "Home Hardware Light Bulbs",
         amount: 14.99,
-        source: "VISA",
+        institution: "VISA",
         tag: "home_maintenance",
     },
     {
@@ -635,41 +635,41 @@ export const transactions: Transaction[] = [
         date: new Date("2025-11-30"),
         description: "Sunday Takeout - Indian",
         amount: 45.00,
-        source: "VISA",
+        institution: "VISA",
         tag: "restaurant",
     },
 
     // --- Transactions 69-99 (Adding Variety and Volume) ---
-    { id: "69", userId: "0", date: new Date("2025-11-01"), description: "Amazon.ca Batteries", amount: 12.99, source: "VISA", tag: "shopping" },
-    { id: "70", userId: "0", date: new Date("2025-11-02"), description: "Tim Hortons Drive Thru", amount: 9.25, source: "VISA", tag: "coffee" },
-    { id: "71", userId: "0", date: new Date("2025-11-03"), description: "Metro Groceries", amount: 55.40, source: "VISA", tag: "groceries" },
-    { id: "72", userId: "0", date: new Date("2025-11-04"), description: "Uber Ride", amount: 15.50, source: "VISA", tag: "transportation" },
-    { id: "73", userId: "0", date: new Date("2025-11-05"), description: "Shell Gas Station", amount: 61.80, source: "VISA", tag: "gas" },
-    { id: "74", userId: "0", date: new Date("2025-11-06"), description: "Dry Cleaning Service", amount: 25.00, source: "VISA", tag: "personal_care" },
-    { id: "75", userId: "0", date: new Date("2025-11-07"), description: "Pizza Slice Lunch", amount: 5.50, source: "VISA", tag: "restaurant" },
-    { id: "76", userId: "0", date: new Date("2025-11-08"), description: "Home Internet Upgrade Fee", amount: 20.00, source: "Checking", tag: "utilities" },
-    { id: "77", userId: "0", date: new Date("2025-11-09"), description: "Value Village Thrift", amount: 14.75, source: "VISA", tag: "shopping" },
-    { id: "78", userId: "0", date: new Date("2025-11-10"), description: "Bulk Coffee Beans", amount: 18.00, source: "VISA", tag: "groceries" },
-    { id: "79", userId: "0", date: new Date("2025-11-11"), description: "Amazon Prime Subscription (Annual)", amount: 119.00, source: "VISA", tag: "subscription" },
-    { id: "80", userId: "0", date: new Date("2025-11-12"), description: "Local Bakery", amount: 7.50, source: "VISA", tag: "groceries" },
-    { id: "81", userId: "0", date: new Date("2025-11-13"), description: "Cineplex Evening Show", amount: 14.00, source: "VISA", tag: "entertainment" },
-    { id: "82", userId: "0", date: new Date("2025-11-14"), description: "Esso Gas Station", amount: 57.65, source: "VISA", tag: "gas" },
-    { id: "83", userId: "0", date: new Date("2025-11-15"), description: "Doctor Co-pay Fee", amount: 35.00, source: "Checking", tag: "health" },
-    { id: "84", userId: "0", date: new Date("2025-11-16"), description: "Pho Restaurant Dinner", amount: 33.50, source: "VISA", tag: "restaurant" },
-    { id: "85", userId: "0", date: new Date("2025-11-17"), description: "Walmart Home Goods", amount: 45.00, source: "VISA", tag: "shopping" },
-    { id: "86", userId: "0", date: new Date("2025-11-18"), description: "Muffin and Coffee", amount: 5.75, source: "VISA", tag: "coffee" },
-    { id: "87", userId: "0", date: new Date("2025-11-19"), description: "LCBO Purchase", amount: 38.45, source: "VISA", tag: "groceries" }, // Alcohol purchase
-    { id: "88", userId: "0", date: new Date("2025-11-20"), description: "Car Battery Replacement", amount: 145.99, source: "VISA", tag: "auto_maintenance" },
-    { id: "89", userId: "0", date: new Date("2025-11-21"), description: "Netflix (Previous month refund)", amount: -16.99, source: "VISA", tag: "subscription" }, // Example refund
-    { id: "90", userId: "0", date: new Date("2025-11-22"), description: "Weekend Movie Rental", amount: 4.99, source: "VISA", tag: "entertainment" },
-    { id: "91", userId: "0", date: new Date("2025-11-23"), description: "A&W Lunch", amount: 12.00, source: "VISA", tag: "restaurant" },
-    { id: "92", userId: "0", date: new Date("2025-11-24"), description: "Loblaws Groceries", amount: 71.30, source: "VISA", tag: "groceries" },
-    { id: "93", userId: "0", date: new Date("2025-11-25"), description: "Parking Ticket Payment", amount: 40.00, source: "Checking", tag: "transportation" },
-    { id: "94", userId: "0", date: new Date("2025-11-26"), description: "Gym Personal Training Session", amount: 60.00, source: "VISA", tag: "health" },
-    { id: "95", userId: "0", date: new Date("2025-11-27"), description: "Gas Station Snack", amount: 3.50, source: "VISA", tag: "groceries" },
-    { id: "96", userId: "0", date: new Date("2025-11-28"), description: "Black Friday Clothing Haul", amount: 180.00, source: "VISA", tag: "shopping" },
-    { id: "97", userId: "0", date: new Date("2025-11-29"), description: "Shawarma Palace (Take 2)", amount: 13.50, source: "VISA", tag: "restaurant" },
-    { id: "98", userId: "0", date: new Date("2025-11-30"), description: "End of Month Savings Transfer", amount: -500.00, source: "Checking", tag: "savings" }, // Example transfer
-    { id: "99", userId: "0", date: new Date("2025-11-30"), description: "Water Bill Payment", amount: 35.80, source: "Checking", tag: "utilities" },
-    { id: "100", userId: "0", date: new Date("2025-11-30"), description: "Shell Gas Station", amount: 58.00, source: "VISA", tag: "gas" },
+    { id: "69", userId: "0", date: new Date("2025-11-01"), description: "Amazon.ca Batteries", amount: 12.99, institution: "VISA", tag: "shopping" },
+    { id: "70", userId: "0", date: new Date("2025-11-02"), description: "Tim Hortons Drive Thru", amount: 9.25, institution: "VISA", tag: "coffee" },
+    { id: "71", userId: "0", date: new Date("2025-11-03"), description: "Metro Groceries", amount: 55.40, institution: "VISA", tag: "groceries" },
+    { id: "72", userId: "0", date: new Date("2025-11-04"), description: "Uber Ride", amount: 15.50, institution: "VISA", tag: "transportation" },
+    { id: "73", userId: "0", date: new Date("2025-11-05"), description: "Shell Gas Station", amount: 61.80, institution: "VISA", tag: "gas" },
+    { id: "74", userId: "0", date: new Date("2025-11-06"), description: "Dry Cleaning Service", amount: 25.00, institution: "VISA", tag: "personal_care" },
+    { id: "75", userId: "0", date: new Date("2025-11-07"), description: "Pizza Slice Lunch", amount: 5.50, institution: "VISA", tag: "restaurant" },
+    { id: "76", userId: "0", date: new Date("2025-11-08"), description: "Home Internet Upgrade Fee", amount: 20.00, institution: "Checking", tag: "utilities" },
+    { id: "77", userId: "0", date: new Date("2025-11-09"), description: "Value Village Thrift", amount: 14.75, institution: "VISA", tag: "shopping" },
+    { id: "78", userId: "0", date: new Date("2025-11-10"), description: "Bulk Coffee Beans", amount: 18.00, institution: "VISA", tag: "groceries" },
+    { id: "79", userId: "0", date: new Date("2025-11-11"), description: "Amazon Prime Subscription (Annual)", amount: 119.00, institution: "VISA", tag: "subscription" },
+    { id: "80", userId: "0", date: new Date("2025-11-12"), description: "Local Bakery", amount: 7.50, institution: "VISA", tag: "groceries" },
+    { id: "81", userId: "0", date: new Date("2025-11-13"), description: "Cineplex Evening Show", amount: 14.00, institution: "VISA", tag: "entertainment" },
+    { id: "82", userId: "0", date: new Date("2025-11-14"), description: "Esso Gas Station", amount: 57.65, institution: "VISA", tag: "gas" },
+    { id: "83", userId: "0", date: new Date("2025-11-15"), description: "Doctor Co-pay Fee", amount: 35.00, institution: "Checking", tag: "health" },
+    { id: "84", userId: "0", date: new Date("2025-11-16"), description: "Pho Restaurant Dinner", amount: 33.50, institution: "VISA", tag: "restaurant" },
+    { id: "85", userId: "0", date: new Date("2025-11-17"), description: "Walmart Home Goods", amount: 45.00, institution: "VISA", tag: "shopping" },
+    { id: "86", userId: "0", date: new Date("2025-11-18"), description: "Muffin and Coffee", amount: 5.75, institution: "VISA", tag: "coffee" },
+    { id: "87", userId: "0", date: new Date("2025-11-19"), description: "LCBO Purchase", amount: 38.45, institution: "VISA", tag: "groceries" }, // Alcohol purchase
+    { id: "88", userId: "0", date: new Date("2025-11-20"), description: "Car Battery Replacement", amount: 145.99, institution: "VISA", tag: "auto_maintenance" },
+    { id: "89", userId: "0", date: new Date("2025-11-21"), description: "Netflix (Previous month refund)", amount: -16.99, institution: "VISA", tag: "subscription" }, // Example refund
+    { id: "90", userId: "0", date: new Date("2025-11-22"), description: "Weekend Movie Rental", amount: 4.99, institution: "VISA", tag: "entertainment" },
+    { id: "91", userId: "0", date: new Date("2025-11-23"), description: "A&W Lunch", amount: 12.00, institution: "VISA", tag: "restaurant" },
+    { id: "92", userId: "0", date: new Date("2025-11-24"), description: "Loblaws Groceries", amount: 71.30, institution: "VISA", tag: "groceries" },
+    { id: "93", userId: "0", date: new Date("2025-11-25"), description: "Parking Ticket Payment", amount: 40.00, institution: "Checking", tag: "transportation" },
+    { id: "94", userId: "0", date: new Date("2025-11-26"), description: "Gym Personal Training Session", amount: 60.00, institution: "VISA", tag: "health" },
+    { id: "95", userId: "0", date: new Date("2025-11-27"), description: "Gas Station Snack", amount: 3.50, institution: "VISA", tag: "groceries" },
+    { id: "96", userId: "0", date: new Date("2025-11-28"), description: "Black Friday Clothing Haul", amount: 180.00, institution: "VISA", tag: "shopping" },
+    { id: "97", userId: "0", date: new Date("2025-11-29"), description: "Shawarma Palace (Take 2)", amount: 13.50, institution: "VISA", tag: "restaurant" },
+    { id: "98", userId: "0", date: new Date("2025-11-30"), description: "End of Month Savings Transfer", amount: -500.00, institution: "Checking", tag: "savings" }, // Example transfer
+    { id: "99", userId: "0", date: new Date("2025-11-30"), description: "Water Bill Payment", amount: 35.80, institution: "Checking", tag: "utilities" },
+    { id: "100", userId: "0", date: new Date("2025-11-30"), description: "Shell Gas Station", amount: 58.00, institution: "VISA", tag: "gas" },
 ];
