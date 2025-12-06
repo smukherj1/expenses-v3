@@ -4,7 +4,7 @@ services:
     image: ghcr.io/smukherj1/expenses/expenses-ui:latest
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "3000:3000"
     networks:
       - expenses-frontend
   expenses-server:
@@ -12,8 +12,9 @@ services:
     image: ghcr.io/smukherj1/expenses/expenses-server:latest
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "4000:4000"
     networks:
+      - expenses-frontend
       - expenses-backend
     environment:
       SPRING_PROFILES_ACTIVE: test
