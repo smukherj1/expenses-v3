@@ -1,0 +1,95 @@
+
+.main-container {
+    display: flex;
+    justify-content: center;
+    padding: 32px;
+    /* Removed background-color to let body theme show directly (typically dark) */
+    min-height: 100vh;
+}
+
+.content-wrapper {
+    width: 100%;
+    max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.search-section {
+    /* Use material elevation background or transparent */
+    background: var(--mat-sys-surface-container, inherit);
+    padding: 24px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    /* Ensure text color adapts */
+    color: var(--mat-sys-on-surface);
+}
+
+.search-section h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 500;
+    /* Inherit or specific var */
+    color: inherit;
+}
+
+.search-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.form-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    /* This centers the inputs in the row */
+    justify-content: center; 
+    align-items: start;
+}
+
+mat-form-field {
+    /* Adjust width for flexbox */
+    width: 100%;
+    max-width: 300px; /* Optional: limit width so they don't stretch too much on wide screens if few items */
+    flex: 1 1 250px; /* Grow, shrink, base width */
+}
+
+/* Specific centering for actions */
+.form-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 8px;
+}
+
+.table-container {
+    background: var(--mat-sys-surface-container, inherit);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+table {
+    width: 100%;
+}
+
+.load-more-container {
+    padding: 24px;
+    display: flex;
+    justify-content: center;
+    /* Removed hardcoded white */
+    border-top: 1px solid var(--mat-sys-outline-variant, #eee);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 48px;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    /* Use variables */
+    background: var(--mat-sys-surface-container, inherit);
+    color: var(--mat-sys-on-surface-variant);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}

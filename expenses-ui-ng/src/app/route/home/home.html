@@ -1,0 +1,108 @@
+<div class="main-container">
+    <div class="content-wrapper">
+        <div class="search-section mat-elevation-z2">
+            <h2>Transactions Search</h2>
+            <form [formGroup]="searchForm" (ngSubmit)="search()" class="search-form">
+                <div class="form-grid">
+                    <mat-form-field appearance="fill">
+                        <mat-label>Date Range</mat-label>
+                        <mat-date-range-input [rangePicker]="picker">
+                            <input matStartDate formControlName="fromDate" placeholder="Start date">
+                            <input matEndDate formControlName="toDate" placeholder="End date">
+                        </mat-date-range-input>
+                        <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
+                        <mat-date-range-picker #picker></mat-date-range-picker>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="fill">
+                        <mat-label>Description</mat-label>
+                        <input matInput formControlName="description">
+                    </mat-form-field>
+
+                    <mat-form-field appearance="fill">
+                        <mat-label>Institution</mat-label>
+                        <input matInput formControlName="institution">
+                    </mat-form-field>
+
+                    <mat-form-field appearance="fill">
+                        <mat-label>Min Amount</mat-label>
+                        <input matInput type="number" formControlName="fromAmount" placeholder="0.00">
+                        <span matTextPrefix>$&nbsp;</span>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="fill">
+                        <mat-label>Max Amount</mat-label>
+                        <input matInput type="number" formControlName="toAmount" placeholder="1000.00">
+                        <span matTextPrefix>$&nbsp;</span>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="fill">
+                        <mat-label>Tag</mat-label>
+                        <input matInput formControlName="tag">
+                    </mat-form-field>
+
+                    <mat-form-field appearance="fill">
+                        <mat-label>Page Size</mat-label>
+                        <mat-select formControlName="pageSize">
+                            <mat-option [value]="10">10</mat-option>
+                            <mat-option [value]="25">25</mat-option>
+                            <mat-option [value]="50">50</mat-option>
+                            <mat-option [value]="100">100</mat-option>
+                        </mat-select>
+                    </mat-form-field>
+                </div>
+
+                <div class="form-actions">
+                    <button mat-flat-button color="primary" type="submit">
+                        <mat-icon>search</mat-icon> Search transactions
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        @if (transactions().length > 0) {
+        <div class="table-container mat-elevation-z8">
+            <table mat-table [dataSource]="transactions()">
+
+                <ng-container matColumnDef="date">
+                    <th mat-header-cell *matHeaderCellDef> Date </th>
+                    <td mat-cell *matCellDef="let element"> {{element.date | date:'mediumDate'}} </td>
+                </ng-container>
+
+                <ng-container matColumnDef="description">
+                    <th mat-header-cell *matHeaderCellDef> Description </th>
+                    <td mat-cell *matCellDef="let element"> {{element.description}} </td>
+                </ng-container>
+
+                <ng-container matColumnDef="institution">
+                    <th mat-header-cell *matHeaderCellDef> Institution </th>
+                    <td mat-cell *matCellDef="let element"> {{element.institution}} </td>
+                </ng-container>
+
+                <ng-container matColumnDef="amount">
+                    <th mat-header-cell *matHeaderCellDef> Amount </th>
+                    <td mat-cell *matCellDef="let element"> {{element.amount | currency}} </td>
+                </ng-container>
+
+                <ng-container matColumnDef="tag">
+                    <th mat-header-cell *matHeaderCellDef> Tag </th>
+                    <td mat-cell *matCellDef="let element"> {{element.tag}} </td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+                <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+            </table>
+
+            @if (nextPageToken()) {
+            <div class="load-more-container">
+                <button mat-stroked-button (click)="loadMore()" color="primary">Load More Results</button>
+            </div>
+            }
+        </div>
+        } @else {
+        <div class="empty-state">
+            <p>No transactions found. Try adjusting your search criteria.</p>
+        </div>
+        }
+    </div>
+</div>
