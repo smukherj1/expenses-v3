@@ -15,8 +15,6 @@ export const SearchBarParamsSchema = z.object({
   toAmount: z.number().optional(),
   institution: z.string().optional(),
   tag: z.string().optional(),
-  pageSize: z.number().optional(),
-  pageIndex: z.number().optional(),
 })
 
 export type SearchBarParams = z.infer<typeof SearchBarParamsSchema>

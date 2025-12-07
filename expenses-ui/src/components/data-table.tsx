@@ -6,8 +6,7 @@ import {
   getCoreRowModel,
   RowSelectionState,
   useReactTable,
-  PaginationState,
-  OnChangeFn,
+  getPaginationRowModel,
 } from '@tanstack/react-table'
 
 import {
@@ -25,8 +24,7 @@ interface DataTableProps<TData, TValue> {
   data: TData[]
   getRowId?: (row: TData) => string
   onRowIdSelectionChange?: (rowIDs: string[]) => void
-  paginationState?: PaginationState
-  setPaginationState?: OnChangeFn<PaginationState>
+  defaultPageSize?: number
   className?: string
 }
 
@@ -35,8 +33,7 @@ export function DataTable<TData, TValue>({
   data,
   getRowId,
   onRowIdSelectionChange,
-  paginationState,
-  setPaginationState,
+  defaultPageSize,
   className,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
@@ -46,15 +43,14 @@ export function DataTable<TData, TValue>({
     getRowId: getRowId,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
-    onPaginationChange: setPaginationState,
+    getPaginationRowModel: getPaginationRowModel(),
     state: {
       rowSelection,
-      pagination: paginationState,
     },
     initialState: {
       // Ignored when paginationState is passed in via props.
       pagination: {
-        pageSize: 25,
+        pageSize: defaultPageSize,
       },
     },
   })

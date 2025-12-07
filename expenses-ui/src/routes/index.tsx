@@ -8,7 +8,6 @@ import SearchBar, { SearchBarParamsSchema } from '@/components/search/searchbar'
 import EditBar from '@/components/search/editbar'
 import { SearchBarParams } from '@/components/search/searchbar'
 import { TransactionsTable } from '@/components/search/transactions-table'
-import { PaginationState } from '@tanstack/react-table'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -85,49 +84,13 @@ function Search() {
 
   const [selectedTxnIds, setSelectedTxnIds] = React.useState<string[]>([])
 
-  // Table pagination state.
-  const [pageSize, setPageSize] = React.useState<number>(
-    sp.pageSize ?? defaultPageSize,
-  )
-  const [pageIndex, setPageIndex] = React.useState<number>(sp.pageIndex ?? 0)
-  const paginationState = React.useMemo(() => {
-    return {
-      pageSize: pageSize,
-      pageIndex: pageIndex,
-    }
-  }, [pageSize, pageIndex])
-  const setPaginationState = React.useCallback(
-    (
-      updater: PaginationState | ((old: PaginationState) => PaginationState),
-    ) => {
-      const newPaginationState =
-        typeof updater === 'function'
-          ? updater({ pageSize, pageIndex })
-          : updater
-      if (newPaginationState.pageSize !== pageSize) {
-        setPageSize(newPaginationState.pageSize)
-      }
-      if (newPaginationState.pageIndex !== pageIndex) {
-        setPageIndex(newPaginationState.pageIndex)
-      }
-    },
-    [pageSize, pageIndex, setPageSize, setPageIndex],
-  )
-
   const onSearchBarChange = React.useCallback(
     (newSbp: SearchBarParams) => {
-      const newSp = { ...newSbp }
-      if (pageIndex !== 0) {
-        newSp.pageIndex = pageIndex
-      }
-      if (pageSize !== defaultPageSize) {
-        newSp.pageSize = pageSize
-      }
       navigate({
-        search: () => newSp,
+        search: () => newSbp,
       })
     },
-    [pageIndex, pageSize, navigate],
+    [navigate],
   )
 
   const onEditBarSubmit = React.useCallback(
@@ -169,8 +132,7 @@ function Search() {
             setSelectedTxnIds(rowIds)
           }
         }}
-        paginationState={paginationState}
-        setPaginationState={setPaginationState}
+        defaultPageSize={defaultPageSize}
       />
     </div>
   )

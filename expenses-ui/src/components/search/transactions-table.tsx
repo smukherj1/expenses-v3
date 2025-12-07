@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { ColumnDef, PaginationState, OnChangeFn } from '@tanstack/react-table'
+import { ColumnDef } from '@tanstack/react-table'
 import { Txn } from '@/lib/transactions'
 import { DataTable } from '@/components/data-table'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -67,16 +67,14 @@ interface TransactionsTableProps {
   data: Txn[]
   className?: string
   onRowIdSelectionChange?: (rowIds: string[]) => void
-  paginationState?: PaginationState
-  setPaginationState?: OnChangeFn<PaginationState>
+  defaultPageSize?: number
 }
 
 export function TransactionsTable({
   data,
   className,
   onRowIdSelectionChange,
-  paginationState,
-  setPaginationState,
+  defaultPageSize,
 }: TransactionsTableProps) {
   const columns = React.useMemo(() => {
     return getColumns()
@@ -88,8 +86,7 @@ export function TransactionsTable({
       className={className}
       getRowId={(row) => `${row.id}`}
       onRowIdSelectionChange={onRowIdSelectionChange}
-      paginationState={paginationState}
-      setPaginationState={setPaginationState}
+      defaultPageSize={defaultPageSize}
     />
   )
 }

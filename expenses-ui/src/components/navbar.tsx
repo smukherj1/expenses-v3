@@ -18,7 +18,6 @@ export default function Navbar() {
   // and vice versa.
   const links: linkData[] = [
     { to: '/', name: 'Home' },
-    { to: '/search', name: 'Search' },
     { to: '/manage', name: 'Manage' },
   ]
   return (
