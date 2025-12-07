@@ -22,6 +22,7 @@ import java.util.stream.IntStream;
 @RestController
 @RequestMapping("/v1/transactions")
 public class TransactionsController {
+    private static final Integer defaultPageSize = 1000;
     private static final Logger logger = LoggerFactory.getLogger(TransactionsController.class);
     private final TransactionStore transactionStore;
     private final KeysetScrollPositionService scrollPositionService;
@@ -43,7 +44,7 @@ public class TransactionsController {
                 request.getInstitution(), request.getTag(), request.getPageToken());
         // Build DB query from request.
         var spec = TransactionSpecs.search(request);
-        var pageSize = request.getPageSize() == null ? 50 : request.getPageSize();
+        var pageSize = request.getPageSize() == null ? defaultPageSize : request.getPageSize();
         ScrollPosition pos;
         try {
             pos = scrollPositionService.decode(request.getPageToken());
