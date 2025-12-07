@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 @RestController
+@RequestMapping("/v1/transactions")
 public class TransactionsController {
     private static final Logger logger = LoggerFactory.getLogger(TransactionsController.class);
     private final TransactionStore transactionStore;
@@ -33,10 +34,10 @@ public class TransactionsController {
         this.scrollPositionService = keysetScrollPositionService;
     }
 
-    @GetMapping("/transactions")
+    @GetMapping
     public TransactionSearchResult getTransactions(@Valid TransactionSearchRequest request) {
         logger.info(
-                "GET /transactions: fromDate={}, toDate={}, description={}, fromAmount={}, toAmount={}, institution={}, tag={}, pageToken={}",
+                "getTransactions: fromDate={}, toDate={}, description={}, fromAmount={}, toAmount={}, institution={}, tag={}, pageToken={}",
                 request.getFromDate(), request.getToDate(), request.getDescription(), request.getFromAmount(),
                 request.getToAmount(),
                 request.getInstitution(), request.getTag(), request.getPageToken());
@@ -87,7 +88,7 @@ public class TransactionsController {
         return new TransactionSearchResult(transactions, null);
     }
 
-    @PostMapping("/transactions")
+    @PostMapping
     public List<Transaction> postTransactions(@RequestBody List<Transaction> newTransactions) {
         validateTransactionsForCreation(newTransactions);
 
@@ -96,7 +97,7 @@ public class TransactionsController {
         return txnsModelsToAPI(addedTxnModels);
     }
 
-    @DeleteMapping("/transactions")
+    @DeleteMapping
     public void deleteTransactions() {
         this.transactionStore.deleteAll();
     }
