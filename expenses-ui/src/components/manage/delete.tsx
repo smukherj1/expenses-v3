@@ -8,11 +8,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { TransactionsService } from '@/lib/server/transactions'
 
 const deleteTxns = createServerFn({
   method: 'POST',
 }).handler(async ({}) => {
-  throw new Error('Deleting transactions not implemented yet')
+  await TransactionsService.deleteTransactions()
 })
 
 export default function Component() {
@@ -34,7 +35,7 @@ export default function Component() {
           )}
           {deleter.isSuccess && (
             <div className="text-green-500 p-4">
-              Successfully deleted {deleter.data} transactions.
+              Successfully deleted transactions.
             </div>
           )}
         </div>

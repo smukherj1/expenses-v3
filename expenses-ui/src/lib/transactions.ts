@@ -40,3 +40,5 @@ export type TxnSearchResponse = z.infer<typeof TxnSearchResponseSchema>
 
 export const TxnUploadRequestSchema = z.array(TxnSchema.omit({ id: true }))
 export type TxnUploadRequest = z.infer<typeof TxnUploadRequestSchema>
+export const TxnUploadResultSchema = z.array(TxnSchema)
+export type TxnUploadResult = z.infer<typeof TxnUploadResultSchema>

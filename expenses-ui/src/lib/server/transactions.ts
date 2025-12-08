@@ -2,6 +2,8 @@ import {
   TxnSearchRequest,
   TxnSearchResponse,
   TxnSearchResponseSchema,
+  TxnUploadRequest,
+  TxnUploadResultSchema,
 } from '@/lib/transactions'
 import EnvironmentService from './environment'
 
@@ -44,6 +46,54 @@ export class TransactionsService {
       )
     }
     return searchResult.data
+  }
+
+  static async uploadTransactions(data: TxnUploadRequest): Promise<number> {
+    const response = await fetch(txnServerEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    })
+    if (!response.ok) {
+      console.error(
+        `Error response from transactions server for POST ${txnServerEndpoint}: ${response.status} ${await response.text()}`,
+      )
+      throw new Error(
+        `Error uploading transactions: ${response.status} ${response.statusText}`,
+      )
+    }
+    const result = await response.json()
+    const uploadResult = TxnUploadResultSchema.safeParse(result, {
+      reportInput: true,
+    })
+    if (!uploadResult.success) {
+      console.error(
+        `Invalid response from transactions server for POST ${txnServerEndpoint}: ${JSON.stringify(uploadResult.error.issues)}`,
+      )
+      throw new Error(
+        `Invalid response from transactions server: ${uploadResult.error.message}`,
+      )
+    }
+    return uploadResult.data.length
+  }
+
+  static async deleteTransactions() {
+    const response = await fetch(txnServerEndpoint, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    if (!response.ok) {
+      console.error(
+        `Error response from transactions server for DELETE ${txnServerEndpoint}: ${response.status} ${await response.text()}`,
+      )
+      throw new Error(
+        `Error deleting transactions: ${response.status} ${response.statusText}`,
+      )
+    }
   }
 
   private static encodeQueryParams<T>(params: T): string {

@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { TransactionsService } from '@/lib/server/transactions'
 
 const uploadTxns = createServerFn({
   method: 'POST',
@@ -32,12 +33,7 @@ const uploadTxns = createServerFn({
     const contents = await file.text()
     var json: any
     try {
-      json = JSON.parse(contents, (key, value) => {
-        if (key === 'date' && typeof value === 'string') {
-          return new Date(value)
-        }
-        return value
-      })
+      json = JSON.parse(contents)
     } catch (error) {
       throw new Error(`invalid JSON file: ${error}`)
     }
@@ -48,15 +44,14 @@ const uploadTxns = createServerFn({
         `Transactions JSON did not have the expected schema: ${errorStr}`,
       )
     }
-    // var uploaded = 0
-    // try {
-    //   uploaded = await UploadTxns(context.session, result.data)
-    // } catch (error) {
-    //   console.log(`Error uploading transactions: ${error}`)
-    //   throw new Error('Error saving uploaded transactions to the database')
-    // }
-    // return uploaded
-    throw new Error('Uploading transactions not implemented yet')
+    var uploaded = 0
+    try {
+      uploaded = await TransactionsService.uploadTransactions(result.data)
+    } catch (error) {
+      console.log(`Error uploading transactions: ${error}`)
+      throw new Error('Error saving uploaded transactions to the database')
+    }
+    return uploaded
   })
 
 export default function Component() {
