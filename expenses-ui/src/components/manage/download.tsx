@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { DateAsString } from '@/lib/date'
 
 import DatePicker from '@/components/date-picker'
 import { Label } from '@/components/ui/label'
@@ -62,8 +63,8 @@ export default function Component() {
               return
             }
             const params = new URLSearchParams({
-              fromDate: from.toISOString(),
-              toDate: to.toISOString(),
+              fromDate: DateAsString(from),
+              toDate: DateAsString(to),
             })
             const a = document.createElement('a')
             a.href = `/api/transactions?${params}`

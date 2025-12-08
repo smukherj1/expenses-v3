@@ -24,7 +24,7 @@ export class TransactionsService {
 
     if (!response.ok) {
       console.error(
-        `Error response from transactions server for GET ${url}: ${response.status}`,
+        `Error response from transactions server for GET ${url}: ${response.status} ${await response.text()}`,
       )
       throw new Error(
         `Error searching transactions: ${response.status} ${response.statusText}`,
@@ -32,7 +32,18 @@ export class TransactionsService {
     }
 
     const data = await response.json()
-    return TxnSearchResponseSchema.parse(data)
+    const searchResult = TxnSearchResponseSchema.safeParse(data, {
+      reportInput: true,
+    })
+    if (!searchResult.success) {
+      console.error(
+        `Invalid response from transactions server for GET ${url}: ${JSON.stringify(searchResult.error.issues)}`,
+      )
+      throw new Error(
+        `Invalid response from transactions server: ${searchResult.error.message}`,
+      )
+    }
+    return searchResult.data
   }
 
   private static encodeQueryParams<T>(params: T): string {

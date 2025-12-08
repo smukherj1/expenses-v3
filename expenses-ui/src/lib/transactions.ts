@@ -6,7 +6,10 @@ const TxnSchema = z.object({
   description: z.string(),
   amount: z.number(),
   institution: z.string(),
-  tag: z.string().nullable(),
+  tag: z
+    .string()
+    .nullish()
+    .transform((x) => x ?? undefined),
 })
 
 export type Txn = z.infer<typeof TxnSchema>
@@ -27,7 +30,10 @@ export type TxnSearchRequest = z.infer<typeof TxnSearchRequestSchema>
 
 export const TxnSearchResponseSchema = z.object({
   transactions: z.array(TxnSchema).optional().default([]),
-  nextPageToken: z.string().optional(),
+  nextPageToken: z
+    .string()
+    .nullish()
+    .transform((x) => x ?? undefined),
 })
 
 export type TxnSearchResponse = z.infer<typeof TxnSearchResponseSchema>

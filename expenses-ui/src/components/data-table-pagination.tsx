@@ -1,4 +1,9 @@
-import { ChevronLeft, ChevronRight, ChevronsLeft } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -8,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { set } from 'date-fns'
 
 interface DataTablePaginationProps {
   selectedRowCount: number
@@ -108,6 +114,16 @@ export function DataTablePagination({
           >
             <span className="sr-only">Go to next page</span>
             <ChevronRight />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={() => setPageIndex(pageCount - 1)}
+            disabled={!canNextPage}
+          >
+            <span className="sr-only">Go to last page</span>
+            <ChevronsRight />
           </Button>
         </div>
       </div>
