@@ -3,7 +3,7 @@ package com.github.smukherj1.expenses.server.controllers;
 import com.github.smukherj1.expenses.server.api.TransactionSearchRequest;
 import com.github.smukherj1.expenses.server.api.Transaction;
 import com.github.smukherj1.expenses.server.api.TransactionSearchResult;
-import com.github.smukherj1.expenses.server.controllers.errors.BadRequestException;
+import com.github.smukherj1.expenses.server.errors.BadRequestException;
 import com.github.smukherj1.expenses.server.models.TransactionModel;
 import com.github.smukherj1.expenses.server.models.TransactionSpecs;
 import com.github.smukherj1.expenses.server.models.TransactionStore;

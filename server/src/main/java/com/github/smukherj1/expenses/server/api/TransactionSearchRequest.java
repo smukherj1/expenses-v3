@@ -23,7 +23,7 @@ public class TransactionSearchRequest {
 
     @Getter
     @Setter
-    @Size(min=1, max = 10)
+    @Size(min=1, max = 100)
     String description;
 
     @Getter
