@@ -93,7 +93,10 @@ export default function SearchBar({
           <Input
             id="desc"
             value={description ?? ''}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value
+              setDescription(v.length > 0 ? v : undefined)
+            }}
             className="rounded-l-none"
           />
         </div>
@@ -128,7 +131,10 @@ export default function SearchBar({
           <Input
             id="institution"
             value={institution ?? ''}
-            onChange={(e) => setInstitution(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value
+              setInstitution(v.length > 0 ? v : undefined)
+            }}
             className="rounded-l-none"
           />
         </div>
@@ -137,7 +143,10 @@ export default function SearchBar({
           <Input
             id="tag"
             value={tag ?? ''}
-            onChange={(e) => setTag(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value
+              setTag(v.length > 0 ? v : undefined)
+            }}
             className="rounded-l-none"
           />
         </div>

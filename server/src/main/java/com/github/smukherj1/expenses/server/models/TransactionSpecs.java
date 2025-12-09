@@ -24,7 +24,7 @@ public class TransactionSpecs {
                 predicates.add(
                         criteriaBuilder.lessThanOrEqualTo(root.get("date").as(LocalDate.class), criteria.getToDate()));
             }
-            if (criteria.getDescription() != null) {
+            if (criteria.getDescription() != null && !criteria.getDescription().isEmpty()) {
                 predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("description")),
                         "%" + criteria.getDescription().toLowerCase() + "%"));
             }
@@ -36,11 +36,11 @@ public class TransactionSpecs {
                 predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("amount").as(BigDecimal.class),
                         criteria.getToAmount()));
             }
-            if (criteria.getInstitution() != null) {
+            if (criteria.getInstitution() != null && !criteria.getInstitution().isEmpty()) {
                 predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("institution")),
                         "%" + criteria.getInstitution().toLowerCase() + "%"));
             }
-            if (criteria.getTag() != null) {
+            if (criteria.getTag() != null && !criteria.getTag().isEmpty()) {
                 predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("tag")),
                         "%" + criteria.getTag().toLowerCase() + "%"));
             }

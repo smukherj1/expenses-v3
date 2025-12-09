@@ -7,7 +7,10 @@ services:
       - "3000:3000"
     networks:
       - expenses-frontend
+    environment:
+      TRANSACTIONS_SERVER_ENDPOINT: http://expenses-server:4000/v1/transactions
   expenses-server:
+    hostname: expenses-server
     container_name: expenses-server
     image: ghcr.io/smukherj1/expenses/expenses-server:latest
     restart: unless-stopped

@@ -23,7 +23,7 @@ public class TransactionSearchRequest {
 
     @Getter
     @Setter
-    @Size(min=1, max = 100)
+    @Size(max = 100)
     String description;
 
     @Getter
@@ -36,12 +36,12 @@ public class TransactionSearchRequest {
 
     @Getter
     @Setter
-    @Size(min = 1, max = 100)
+    @Size(max = 100)
     String institution;
 
     @Getter
     @Setter
-    @Size(min = 1, max = 100)
+    @Size(max = 100)
     String tag;
 
     @Getter
