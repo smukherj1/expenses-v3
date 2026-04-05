@@ -8,6 +8,134 @@
 - **Papa Parse** — CSV parsing
 - **Node.js 22** — runtime
 
+## API Endpoints
+
+Base path: `/api`
+
+### Accounts
+
+| Method | Path                | Description                         |
+| ------ | ------------------- | ----------------------------------- |
+| GET    | `/api/accounts`     | List accounts for current user      |
+| POST   | `/api/accounts`     | Create account `{ label }`          |
+| DELETE | `/api/accounts/:id` | Delete account and its transactions |
+
+### Uploads
+
+| Method | Path                              | Description                          |
+| ------ | --------------------------------- | ------------------------------------ |
+| POST   | `/api/accounts/:accountId/upload` | Upload file (multipart/form-data)    |
+| GET    | `/api/uploads`                    | List uploads (filterable by account) |
+| DELETE | `/api/uploads/:id`                | Delete upload and its transactions   |
+
+### Transactions
+
+| Method | Path                         | Description                                                                                                                                          |
+| ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/transactions`          | Search/filter transactions (query params: `q`, `dateFrom`, `dateTo`, `amountMin`, `amountMax`, `accountId`, `tags`, `type`, `sort`, `page`, `limit`) |
+| GET    | `/api/transactions/:id`      | Get single transaction with tags                                                                                                                     |
+| PATCH  | `/api/transactions/:id`      | Update transaction (tags, description)                                                                                                               |
+| POST   | `/api/transactions/bulk-tag` | `{ transactionIds[], tagNames[], action: 'add' \| 'remove' }`                                                                                       |
+
+### Tags
+
+| Method | Path            | Description                                |
+| ------ | --------------- | ------------------------------------------ |
+| GET    | `/api/tags`     | List tags for current user                 |
+| POST   | `/api/tags`     | Create tag `{ name }`                      |
+| DELETE | `/api/tags/:id` | Delete tag (removes from all transactions) |
+
+### Auto-Tag Rules
+
+| Method | Path                   | Description                                       |
+| ------ | ---------------------- | ------------------------------------------------- |
+| GET    | `/api/rules`           | List rules for current user                       |
+| POST   | `/api/rules`           | Create rule `{ conditions[], tagId }`             |
+| PUT    | `/api/rules/:id`       | Update rule                                       |
+| DELETE | `/api/rules/:id`       | Delete rule                                       |
+| POST   | `/api/rules/:id/apply` | Retroactively apply rule to existing transactions |
+| POST   | `/api/rules/apply-all` | Apply all rules to existing transactions          |
+
+### Analytics
+
+| Method | Path                                | Description                                               |
+| ------ | ----------------------------------- | --------------------------------------------------------- |
+| GET    | `/api/analytics/monthly-summary`    | `?year` -> income/expense totals per month                |
+| GET    | `/api/analytics/category-breakdown` | `?year&month` -> amount per tag                           |
+| GET    | `/api/analytics/trend`              | `?tag&months` -> monthly amounts for a category over time |
+| GET    | `/api/analytics/top-transactions`   | `?n&dateFrom&dateTo&type` -> largest transactions         |
+
+## Database Schema (Drizzle)
+
+Detailed column types and constraints:
+
+```
+users
+  id          uuid        PK, default gen_random_uuid()
+  name        varchar(255)
+  email       varchar(255) UNIQUE NOT NULL
+  created_at  timestamp   default now()
+
+accounts
+  id          uuid        PK, default gen_random_uuid()
+  user_id     uuid        FK -> users.id ON DELETE CASCADE
+  label       varchar(255) NOT NULL
+  created_at  timestamp   default now()
+  UNIQUE(user_id, label)
+
+uploads
+  id          uuid        PK, default gen_random_uuid()
+  account_id  uuid        FK -> accounts.id ON DELETE CASCADE
+  filename    varchar(512) NOT NULL
+  row_count   integer     NOT NULL default 0
+  uploaded_at timestamp   default now()
+
+transactions
+  id          uuid        PK, default gen_random_uuid()
+  account_id  uuid        FK -> accounts.id ON DELETE CASCADE
+  upload_id   uuid        FK -> uploads.id ON DELETE SET NULL, nullable
+  date        date        NOT NULL
+  description text        NOT NULL
+  amount      numeric(12,2) NOT NULL  -- positive = income, negative = expense
+  currency    varchar(3)  NOT NULL default 'CAD'  -- CHECK (currency = 'CAD') for now
+  created_at  timestamp   default now()
+  INDEX(account_id, date)
+  INDEX(description) using GIN (to_tsvector)  -- full-text search
+
+tags
+  id          uuid        PK, default gen_random_uuid()
+  user_id     uuid        FK -> users.id ON DELETE CASCADE
+  name        varchar(100) NOT NULL
+  UNIQUE(user_id, name)
+
+transaction_tags
+  transaction_id  uuid    FK -> transactions.id ON DELETE CASCADE
+  tag_id          uuid    FK -> tags.id ON DELETE CASCADE
+  PRIMARY KEY (transaction_id, tag_id)
+
+auto_tag_rules
+  id          uuid        PK, default gen_random_uuid()
+  user_id     uuid        FK -> users.id ON DELETE CASCADE
+  tag_id      uuid        FK -> tags.id ON DELETE CASCADE
+
+auto_tag_rule_conditions
+  id          uuid        PK, default gen_random_uuid()
+  rule_id     uuid        FK -> auto_tag_rules.id ON DELETE CASCADE
+  match_field varchar(20) NOT NULL  -- 'description' | 'amount'
+  match_type  varchar(20) NOT NULL  -- 'contains' | 'exact' | 'regex' | 'gt' | 'lt'
+  match_value text        NOT NULL
+```
+
+### Seed Data
+
+On first migration, seed a default user:
+
+```
+users: { id: '00000000-0000-0000-0000-000000000001', name: 'Default User', email: 'default@local' }
+```
+
+All API requests use this hardcoded user ID until auth is implemented.
+
 ## Entry Point
 
 `src/index.ts` creates the Hono app, registers middleware, mounts route groups, and starts the server.

@@ -1,0 +1,9 @@
+out
+node_modules
+
+frontend/dist
+frontend/node_modules
+frontend/tsconfig.tsbuildinfo
+
+backend/node_modules
+backend/dist
