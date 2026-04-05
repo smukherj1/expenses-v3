@@ -1,0 +1,15 @@
+{
+  "name": "expenses-v3",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "test:backend": "bun test tests/backend.test.ts",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0"
+  }
+}

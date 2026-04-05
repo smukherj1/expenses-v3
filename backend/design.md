@@ -35,7 +35,7 @@ Base path: `/api`
 | GET    | `/api/transactions`          | Search/filter transactions (query params: `q`, `dateFrom`, `dateTo`, `amountMin`, `amountMax`, `accountId`, `tags`, `type`, `sort`, `page`, `limit`) |
 | GET    | `/api/transactions/:id`      | Get single transaction with tags                                                                                                                     |
 | PATCH  | `/api/transactions/:id`      | Update transaction (tags, description)                                                                                                               |
-| POST   | `/api/transactions/bulk-tag` | `{ transactionIds[], tagNames[], action: 'add' \| 'remove' }`                                                                                       |
+| POST   | `/api/transactions/bulk-tag` | `{ transactionIds[], tagNames[], action: 'add' \| 'remove' }`                                                                                        |
 
 ### Tags
 
@@ -142,14 +142,14 @@ All API requests use this hardcoded user ID until auth is implemented.
 
 ```typescript
 // Pseudocode
-const app = new Hono()
-app.use('*', defaultUserMiddleware)
-app.route('/api/accounts', accountRoutes)
-app.route('/api/uploads', uploadRoutes)
-app.route('/api/transactions', transactionRoutes)
-app.route('/api/tags', tagRoutes)
-app.route('/api/rules', ruleRoutes)
-app.route('/api/analytics', analyticsRoutes)
+const app = new Hono();
+app.use("*", defaultUserMiddleware);
+app.route("/api/accounts", accountRoutes);
+app.route("/api/uploads", uploadRoutes);
+app.route("/api/transactions", transactionRoutes);
+app.route("/api/tags", tagRoutes);
+app.route("/api/rules", ruleRoutes);
+app.route("/api/analytics", analyticsRoutes);
 ```
 
 ## Source Layout
@@ -196,12 +196,12 @@ backend/src/
 ### Default User Middleware (`defaultUser.ts`)
 
 ```typescript
-const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000001'
+const DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 export const defaultUserMiddleware = createMiddleware(async (c, next) => {
-  c.set('userId', DEFAULT_USER_ID)
-  await next()
-})
+  c.set("userId", DEFAULT_USER_ID);
+  await next();
+});
 ```
 
 When auth is added, this is swapped for a real auth middleware that extracts `userId` from a JWT/session. Route handlers only ever read `c.get('userId')`, so no other changes are needed.
@@ -210,13 +210,13 @@ When auth is added, this is swapped for a real auth middleware that extracts `us
 
 Catches errors and returns structured JSON:
 
-| Error Type | HTTP Status | Code |
-|---|---|---|
-| `ZodError` | 400 | `VALIDATION_ERROR` |
-| `NotFoundError` | 404 | `NOT_FOUND` |
-| `ConflictError` | 409 | `CONFLICT` (duplicates) |
-| `UnsupportedCurrencyError` | 422 | `UNSUPPORTED_CURRENCY` |
-| Unhandled | 500 | `INTERNAL_ERROR` |
+| Error Type                 | HTTP Status | Code                    |
+| -------------------------- | ----------- | ----------------------- |
+| `ZodError`                 | 400         | `VALIDATION_ERROR`      |
+| `NotFoundError`            | 404         | `NOT_FOUND`             |
+| `ConflictError`            | 409         | `CONFLICT` (duplicates) |
+| `UnsupportedCurrencyError` | 422         | `UNSUPPORTED_CURRENCY`  |
+| Unhandled                  | 500         | `INTERNAL_ERROR`        |
 
 ## Route Handlers — Detail
 
@@ -241,19 +241,19 @@ Query params validated by Zod:
 
 ```typescript
 z.object({
-  q: z.string().optional(),               // full-text search
+  q: z.string().optional(), // full-text search
   dateFrom: z.string().date().optional(),
   dateTo: z.string().date().optional(),
   amountMin: z.coerce.number().optional(),
   amountMax: z.coerce.number().optional(),
   accountId: z.string().uuid().optional(),
-  tags: z.string().optional(),             // comma-separated tag names
-  type: z.enum(['income', 'expense']).optional(),
-  sort: z.enum(['date', 'amount', 'description']).default('date'),
-  order: z.enum(['asc', 'desc']).default('desc'),
+  tags: z.string().optional(), // comma-separated tag names
+  type: z.enum(["income", "expense"]).optional(),
+  sort: z.enum(["date", "amount", "description"]).default("date"),
+  order: z.enum(["asc", "desc"]).default("desc"),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),
-})
+});
 ```
 
 The service builds a dynamic Drizzle query with `where` conditions based on provided params. Full-text search uses PostgreSQL `to_tsvector` / `plainto_tsquery`.
@@ -266,8 +266,8 @@ Returns: `{ data: Transaction[], total: number, page, limit }`.
 z.object({
   transactionIds: z.array(z.string().uuid()).min(1),
   tagNames: z.array(z.string().min(1)).min(1),
-  action: z.enum(['add', 'remove']),
-})
+  action: z.enum(["add", "remove"]),
+});
 ```
 
 - `add`: creates tags if they don't exist, inserts into `transaction_tags` (ON CONFLICT DO NOTHING).
@@ -278,12 +278,16 @@ z.object({
 ```typescript
 z.object({
   tagId: z.string().uuid(),
-  conditions: z.array(z.object({
-    matchField: z.enum(['description', 'amount']),
-    matchType: z.enum(['contains', 'exact', 'regex', 'gt', 'lt']),
-    matchValue: z.string().min(1),
-  })).min(1),
-})
+  conditions: z
+    .array(
+      z.object({
+        matchField: z.enum(["description", "amount"]),
+        matchType: z.enum(["contains", "exact", "regex", "gt", "lt"]),
+        matchValue: z.string().min(1),
+      }),
+    )
+    .min(1),
+});
 ```
 
 All conditions are AND-ed. To achieve OR, users create multiple rules for the same tag.
@@ -300,6 +304,7 @@ All conditions are AND-ed. To achieve OR, users create multiple rules for the sa
 ### CSV Parser (`parsers/csv.ts`)
 
 Uses Papa Parse with:
+
 - `header: true` — first row is column names.
 - `skipEmptyLines: true`
 - Column mapping: the parser attempts to match common column names:

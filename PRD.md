@@ -12,11 +12,11 @@ A web application that lets users upload financial transactions from bank accoun
 
 ## User Personas
 
-| Persona | Description |
-|---|---|
-| **Individual budget tracker** | Wants to import bank/credit-card CSVs monthly, tag recurring expenses, and see monthly spending breakdowns. |
-| **Freelancer** | Tracks income from multiple clients alongside personal expenses; needs to separate business vs. personal categories. |
-| **Household** | Multiple accounts (joint checking, individual cards); wants a combined view with per-account filtering. |
+| Persona                       | Description                                                                                                          |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Individual budget tracker** | Wants to import bank/credit-card CSVs monthly, tag recurring expenses, and see monthly spending breakdowns.          |
+| **Freelancer**                | Tracks income from multiple clients alongside personal expenses; needs to separate business vs. personal categories. |
+| **Household**                 | Multiple accounts (joint checking, individual cards); wants a combined view with per-account filtering.              |
 
 ## Core Features
 
@@ -51,12 +51,12 @@ A web application that lets users upload financial transactions from bank accoun
 
 All charts are filterable by date range, account, and tags.
 
-| Chart | Purpose |
-|---|---|
-| **Monthly bar chart** | Total income vs. expenses per month for a selected year. |
-| **Category pie chart** | Breakdown of expenses (or income) by tag for a given month or year. |
-| **Trend line chart** | Month-over-month spending in a selected category (or total) over multiple years. |
-| **Top-N table** | Largest transactions in a period, or highest-spend categories. |
+| Chart                  | Purpose                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| **Monthly bar chart**  | Total income vs. expenses per month for a selected year.                         |
+| **Category pie chart** | Breakdown of expenses (or income) by tag for a given month or year.              |
+| **Trend line chart**   | Month-over-month spending in a selected category (or total) over multiple years. |
+| **Top-N table**        | Largest transactions in a period, or highest-spend categories.                   |
 
 - Users can toggle between viewing expenses only, income only, or both.
 - Drill-down: clicking a chart segment navigates to the filtered transaction list.
@@ -138,14 +138,14 @@ AutoTagRuleCondition      -- one rule has 1..N conditions, all must match (AND)
 
 ## Milestones
 
-| # | Milestone | Scope |
-|---|---|---|
-| 1 | **Upload & Store** | Account creation, file upload (CSV/JSON), parsing, transaction storage, duplicate warnings. |
-| 2 | **Search & Tag** | Transaction list with search/filter, manual tagging, bulk tagging. |
-| 3 | **Visualize** | Dashboard with monthly bar chart, category pie chart, trend line, top-N table. |
-| 4 | **Auto-tag Rules** | Rule CRUD with AND conditions, retroactive application, auto-apply on upload. |
-| 5 | **Auth & Multi-user** | User registration/login, replace default user with real auth. |
-| 6 | **Polish & Deploy** | Responsive layout, error handling, Docker production config, CI. |
+| #   | Milestone             | Scope                                                                                       |
+| --- | --------------------- | ------------------------------------------------------------------------------------------- |
+| 1   | **Upload & Store**    | Account creation, file upload (CSV/JSON), parsing, transaction storage, duplicate warnings. |
+| 2   | **Search & Tag**      | Transaction list with search/filter, manual tagging, bulk tagging.                          |
+| 3   | **Visualize**         | Dashboard with monthly bar chart, category pie chart, trend line, top-N table.              |
+| 4   | **Auto-tag Rules**    | Rule CRUD with AND conditions, retroactive application, auto-apply on upload.               |
+| 5   | **Auth & Multi-user** | User registration/login, replace default user with real auth.                               |
+| 6   | **Polish & Deploy**   | Responsive layout, error handling, Docker production config, CI.                            |
 
 ## Deferred Features
 

@@ -76,16 +76,16 @@ A `<RootLayout />` wraps all routes with the app shell (sidebar nav, header).
 
 ## Shared Components
 
-| Component | Purpose |
-|---|---|
-| `<Sidebar />` | App navigation, highlights active route |
-| `<Header />` | Page title derived from route, optional breadcrumbs |
-| `<Pagination />` | Page controls, used by TransactionTable and TopNTable |
-| `<TagBadge />` | Displays a tag name with optional remove button |
-| `<TagInput />` | Autocomplete input for adding tags (queries GET `/api/tags`) |
-| `<EmptyState />` | Placeholder when no data exists |
+| Component           | Purpose                                                          |
+| ------------------- | ---------------------------------------------------------------- |
+| `<Sidebar />`       | App navigation, highlights active route                          |
+| `<Header />`        | Page title derived from route, optional breadcrumbs              |
+| `<Pagination />`    | Page controls, used by TransactionTable and TopNTable            |
+| `<TagBadge />`      | Displays a tag name with optional remove button                  |
+| `<TagInput />`      | Autocomplete input for adding tags (queries GET `/api/tags`)     |
+| `<EmptyState />`    | Placeholder when no data exists                                  |
 | `<ConfirmDialog />` | Confirmation modal for destructive actions (delete upload, etc.) |
-| `<FileDropzone />` | Drag-and-drop file upload area with format validation |
+| `<FileDropzone />`  | Drag-and-drop file upload area with format validation            |
 
 ## API Client Layer
 
@@ -115,6 +115,7 @@ TanStack Query handles all server state:
 ## Key Interactions
 
 ### Upload Flow
+
 1. User selects account (or creates new one).
 2. User drops/picks file(s).
 3. Frontend reads file, sends as `multipart/form-data` to `POST /api/accounts/:accountId/upload`.
@@ -122,12 +123,14 @@ TanStack Query handles all server state:
 5. Frontend shows result summary and refreshes upload history.
 
 ### Bulk Tagging Flow
+
 1. User checks rows in TransactionTable (checkboxes).
 2. BulkTagBar appears at top with tag input + "Add" / "Remove" buttons.
 3. On submit, calls `POST /api/transactions/bulk-tag`.
 4. Table refreshes via query invalidation.
 
 ### Chart Drill-Down
+
 1. User clicks a pie slice or bar segment.
 2. App navigates to `/transactions?tag=X&dateFrom=Y&dateTo=Z` (pre-filtered).
 
