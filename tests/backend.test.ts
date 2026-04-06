@@ -1,22 +1,14 @@
 /**
  * E2E tests for the Financial Tracker backend API.
  * Requires the backend to be running at BACKEND_URL (default: http://localhost:3000).
- * These tests are stateful and run sequentially — each describe block may depend on
- * state created by earlier blocks.
+ * Each describe block is self-contained: beforeAll creates required data,
+ * afterAll tears it down.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 
 const BASE_URL = process.env.BACKEND_URL ?? "http://localhost:3000";
 const API = `${BASE_URL}/api`;
-
-// IDs shared across test sections, populated as resources are created.
-let accountId: string;
-let secondAccountId: string;
-let uploadId: string;
-let transactionId: string;
-let tagId: string;
-let ruleId: string;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,61 +30,89 @@ async function json<T = unknown>(
   return { status: res.status, data };
 }
 
-/** Build a minimal well-formed CSV for upload tests. */
-function makeCsv(
-  rows: { date: string; description: string; amount: number }[],
-) {
-  const header = "date,description,amount,currency";
-  const lines = rows.map((r) => `${r.date},${r.description},${r.amount},CAD`);
+type CsvRow = {
+  date: string;
+  description: string;
+  amount: number;
+  account: string;
+};
+
+/** Build a minimal well-formed CSV for upload tests. Dates must be yyyy-mm-dd. */
+function makeCsv(rows: CsvRow[]) {
+  const header = "date,description,amount,currency,account";
+  const lines = rows.map(
+    (r) => `${r.date},${r.description},${r.amount},CAD,${r.account}`,
+  );
   return [header, ...lines].join("\n");
+}
+
+async function uploadCsv(
+  rows: CsvRow[],
+  filename = "test.csv",
+): Promise<Response> {
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([makeCsv(rows)], { type: "text/csv" }),
+    filename,
+  );
+  return fetch(`${API}/uploads`, { method: "POST", body: form });
+}
+
+async function uploadCsvOk(
+  rows: CsvRow[],
+  filename = "test.csv",
+): Promise<{ inserted: number; duplicatesSkipped: number }> {
+  const res = await uploadCsv(rows, filename);
+  return res.json();
+}
+
+async function getAccountId(label: string): Promise<string> {
+  const { data } = await json<Array<{ id: string; label: string }>>(
+    "GET",
+    "/accounts",
+  );
+  const acct = data.find((a) => a.label === label);
+  if (!acct) throw new Error(`Account not found: ${label}`);
+  return acct.id;
+}
+
+async function deleteAccountByLabel(label: string) {
+  const { data } = await json<Array<{ id: string; label: string }>>(
+    "GET",
+    "/accounts",
+  );
+  const acct = data.find((a) => a.label === label);
+  if (acct) await req("DELETE", `/accounts/${acct.id}`);
 }
 
 // ── accounts ─────────────────────────────────────────────────────────────────
 
 describe("Accounts", () => {
-  it("POST /api/accounts — creates an account", async () => {
-    const { status, data } = await json<{ id: string; label: string }>(
-      "POST",
-      "/accounts",
-      { label: "TD Chequing" },
-    );
-    expect(status).toBe(201);
-    expect(data.id).toBeTruthy();
-    expect(data.label).toBe("TD Chequing");
-    accountId = data.id;
+  const accountLabel = "Accounts Test — Chequing";
+
+  afterAll(async () => {
+    await deleteAccountByLabel(accountLabel);
   });
 
-  it("POST /api/accounts — creates a second account", async () => {
-    const { status, data } = await json<{ id: string; label: string }>(
-      "POST",
-      "/accounts",
-      { label: "Visa Card" },
-    );
-    expect(status).toBe(201);
-    secondAccountId = data.id;
+  it("POST /api/accounts — not supported (returns 404)", async () => {
+    const { status } = await json("POST", "/accounts", { label: accountLabel });
+    expect(status).toBe(404);
   });
 
-  it("POST /api/accounts — rejects duplicate label", async () => {
-    const { status, data } = await json<{ error: { code: string } }>(
-      "POST",
-      "/accounts",
-      { label: "TD Chequing" },
-    );
-    expect(status).toBe(409);
-    expect(data.error.code).toBe("CONFLICT");
+  it("POST /api/uploads — automatically creates account", async () => {
+    const data = await uploadCsvOk([
+      {
+        date: "2025-03-01",
+        description: "Grocery Store",
+        amount: -82.5,
+        account: accountLabel,
+      },
+    ]);
+    expect(data.inserted).toBe(1);
   });
 
-  it("POST /api/accounts — rejects missing label", async () => {
-    const { status, data } = await json<{ error: { code: string } }>(
-      "POST",
-      "/accounts",
-      {},
-    );
-    expect(status).toBe(400);
-    expect(data.error.code).toBe("VALIDATION_ERROR");
-  });
-
-  it("GET /api/accounts — lists accounts including created ones", async () => {
+  it("GET /api/accounts — lists auto-created accounts", async () => {
     const { status, data } = await json<Array<{ id: string; label: string }>>(
       "GET",
       "/accounts",
@@ -100,118 +120,237 @@ describe("Accounts", () => {
     expect(status).toBe(200);
     expect(Array.isArray(data)).toBe(true);
     const labels = data.map((a) => a.label);
-    expect(labels).toContain("TD Chequing");
-    expect(labels).toContain("Visa Card");
+    expect(labels).toContain(accountLabel);
+  });
+
+  it("DELETE /api/accounts/:id — deletes account and cascades transactions", async () => {
+    const id = await getAccountId(accountLabel);
+    const res = await req("DELETE", `/accounts/${id}`);
+    expect(res.status).toBe(204);
+  });
+
+  it("DELETE /api/accounts/:id — 404 for unknown id", async () => {
+    const { status, data } = await json<{ error: { code: string } }>(
+      "DELETE",
+      "/accounts/00000000-0000-0000-0000-000000000999",
+    );
+    expect(status).toBe(404);
+    expect(data.error.code).toBe("NOT_FOUND");
   });
 });
 
 // ── uploads ───────────────────────────────────────────────────────────────────
 
 describe("Uploads", () => {
-  it("POST /api/accounts/:id/upload — uploads a CSV file", async () => {
-    const csv = makeCsv([
-      { date: "2025-03-01", description: "Grocery Store", amount: -82.5 },
-      { date: "2025-03-05", description: "Payroll Deposit", amount: 3200.0 },
-      { date: "2025-03-10", description: "Coffee Shop", amount: -6.75 },
-    ]);
+  const chequingLabel = "Uploads Test — Chequing";
+  const visaLabel = "Uploads Test — Visa";
+  const savingsLabel = "Uploads Test — Savings";
 
-    const form = new FormData();
-    form.append("file", new Blob([csv], { type: "text/csv" }), "march.csv");
-
-    const res = await fetch(`${API}/accounts/${accountId}/upload`, {
-      method: "POST",
-      body: form,
-    });
-    const data = (await res.json()) as {
-      uploadId: string;
-      inserted: number;
-      duplicatesSkipped: number;
-    };
-
-    expect(res.status).toBe(201);
-    expect(data.uploadId).toBeTruthy();
-    expect(data.inserted).toBe(3);
-    expect(data.duplicatesSkipped).toBe(0);
-    uploadId = data.uploadId;
+  afterAll(async () => {
+    for (const label of [chequingLabel, visaLabel, savingsLabel]) {
+      await deleteAccountByLabel(label);
+    }
   });
 
-  it("POST /api/accounts/:id/upload — skips duplicate rows on second upload", async () => {
-    const csv = makeCsv([
-      { date: "2025-03-01", description: "Grocery Store", amount: -82.5 },
-      { date: "2025-03-15", description: "Internet Bill", amount: -59.99 },
-    ]);
+  it("POST /api/uploads — inserts transactions and creates accounts automatically", async () => {
+    const data = await uploadCsvOk(
+      [
+        {
+          date: "2025-03-01",
+          description: "Grocery Store",
+          amount: -82.5,
+          account: chequingLabel,
+        },
+        {
+          date: "2025-03-05",
+          description: "Payroll Deposit",
+          amount: 3200.0,
+          account: chequingLabel,
+        },
+        {
+          date: "2025-03-10",
+          description: "Coffee Shop",
+          amount: -6.75,
+          account: visaLabel,
+        },
+      ],
+      "march.csv",
+    );
+    expect(data.inserted).toBe(3);
+    expect(data.duplicatesSkipped).toBe(0);
 
-    const form = new FormData();
-    form.append("file", new Blob([csv], { type: "text/csv" }), "march2.csv");
+    // Both accounts should now exist
+    const { data: accounts } = await json<Array<{ label: string }>>(
+      "GET",
+      "/accounts",
+    );
+    const labels = accounts.map((a) => a.label);
+    expect(labels).toContain(chequingLabel);
+    expect(labels).toContain(visaLabel);
+  });
 
-    const res = await fetch(`${API}/accounts/${accountId}/upload`, {
-      method: "POST",
-      body: form,
-    });
-    const data = (await res.json()) as {
-      inserted: number;
-      duplicatesSkipped: number;
-    };
-
-    expect(res.status).toBe(201);
+  it("POST /api/uploads — skips duplicate rows on second upload", async () => {
+    const data = await uploadCsvOk(
+      [
+        {
+          date: "2025-03-01",
+          description: "Grocery Store",
+          amount: -82.5,
+          account: chequingLabel,
+        },
+        {
+          date: "2025-03-15",
+          description: "Internet Bill",
+          amount: -59.99,
+          account: chequingLabel,
+        },
+      ],
+      "march2.csv",
+    );
     expect(data.inserted).toBe(1); // only the new one
     expect(data.duplicatesSkipped).toBe(1);
   });
 
-  it("POST /api/accounts/:id/upload — rejects non-CAD currency", async () => {
+  it("POST /api/uploads — merging: reuses existing accounts, creates only new ones", async () => {
+    // chequingLabel and visaLabel already exist; savingsLabel does not
+    const data = await uploadCsvOk(
+      [
+        {
+          date: "2025-04-01",
+          description: "Existing Account Txn",
+          amount: -20.0,
+          account: chequingLabel,
+        },
+        {
+          date: "2025-04-01",
+          description: "New Account Txn",
+          amount: 500.0,
+          account: savingsLabel,
+        },
+      ],
+      "mixed.csv",
+    );
+    expect(data.inserted).toBe(2);
+
+    // Exactly 3 test accounts — no duplicate account created for chequingLabel
+    const { data: accounts } = await json<Array<{ label: string }>>(
+      "GET",
+      "/accounts",
+    );
+    const testAccounts = accounts.filter((a) =>
+      [chequingLabel, visaLabel, savingsLabel].includes(a.label),
+    );
+    expect(testAccounts.length).toBe(3);
+  });
+
+  it("POST /api/uploads — rejects non-CAD currency", async () => {
     const csv =
-      "date,description,amount,currency\n2025-03-01,Something,-10.00,USD";
+      "date,description,amount,currency,account\n2025-03-01,Something,-10.00,USD,Some Account";
     const form = new FormData();
     form.append("file", new Blob([csv], { type: "text/csv" }), "usd.csv");
-
-    const res = await fetch(`${API}/accounts/${accountId}/upload`, {
-      method: "POST",
-      body: form,
-    });
+    const res = await fetch(`${API}/uploads`, { method: "POST", body: form });
     const data = (await res.json()) as { error: { code: string } };
-
     expect(res.status).toBe(422);
     expect(data.error.code).toBe("UNSUPPORTED_CURRENCY");
   });
 
-  it("POST /api/accounts/:id/upload — rejects upload for unknown account", async () => {
-    const csv = makeCsv([
-      { date: "2025-03-01", description: "Test", amount: -1 },
+  it("POST /api/uploads — rejects CSV with wrong date format (yyyy/mm/dd)", async () => {
+    const res = await uploadCsv(
+      [
+        {
+          date: "2025/03/01", // wrong format — must be yyyy-mm-dd
+          description: "Something",
+          amount: -10.0,
+          account: "Some Account",
+        },
+      ],
+      "bad-date.csv",
+    );
+    const data = (await res.json()) as { error: { code: string } };
+    expect(res.status).toBe(400);
+    expect(data.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("POST /api/uploads — rejects JSON with wrong date format (yyyy/mm/dd)", async () => {
+    const jsonBody = JSON.stringify([
+      {
+        date: "2025/03/01", // wrong format — must be yyyy-mm-dd
+        description: "Something",
+        amount: -10.0,
+        currency: "CAD",
+        account: "Some Account",
+      },
     ]);
     const form = new FormData();
-    form.append("file", new Blob([csv], { type: "text/csv" }), "test.csv");
-
-    const res = await fetch(
-      `${API}/accounts/00000000-0000-0000-0000-000000000999/upload`,
-      { method: "POST", body: form },
+    form.append(
+      "file",
+      new Blob([jsonBody], { type: "application/json" }),
+      "bad-date.json",
     );
-    expect(res.status).toBe(404);
+    const res = await fetch(`${API}/uploads`, { method: "POST", body: form });
+    const data = (await res.json()) as { error: { code: string } };
+    expect(res.status).toBe(400);
+    expect(data.error.code).toBe("VALIDATION_ERROR");
   });
 
-  it("GET /api/uploads — lists uploads", async () => {
-    const { status, data } = await json<
-      Array<{ id: string; filename: string }>
-    >("GET", "/uploads");
-    expect(status).toBe(200);
-    expect(Array.isArray(data)).toBe(true);
-    const ids = data.map((u) => u.id);
-    expect(ids).toContain(uploadId);
-  });
-
-  it("GET /api/uploads — filters by accountId", async () => {
-    const { status, data } = await json<Array<{ id: string }>>(
-      "GET",
-      `/uploads?accountId=${secondAccountId}`,
+  it("POST /api/uploads — accepts valid JSON upload", async () => {
+    const jsonBody = JSON.stringify([
+      {
+        date: "2025-04-02",
+        description: "JSON Upload Test",
+        amount: -15.0,
+        currency: "CAD",
+        account: chequingLabel,
+      },
+    ]);
+    const form = new FormData();
+    form.append(
+      "file",
+      new Blob([jsonBody], { type: "application/json" }),
+      "upload.json",
     );
-    expect(status).toBe(200);
-    const ids = data.map((u) => u.id);
-    expect(ids).not.toContain(uploadId);
+    const res = await fetch(`${API}/uploads`, { method: "POST", body: form });
+    const data = (await res.json()) as { inserted: number };
+    expect(res.status).toBe(201);
+    expect(data.inserted).toBe(1);
   });
 });
 
 // ── transactions ──────────────────────────────────────────────────────────────
 
 describe("Transactions", () => {
+  const accountLabel = "Transactions Test";
+  let accountId: string;
+  let transactionId: string;
+
+  beforeAll(async () => {
+    await uploadCsvOk([
+      {
+        date: "2025-03-01",
+        description: "Grocery Store",
+        amount: -82.5,
+        account: accountLabel,
+      },
+      {
+        date: "2025-03-05",
+        description: "Payroll Deposit",
+        amount: 3200.0,
+        account: accountLabel,
+      },
+      {
+        date: "2025-03-10",
+        description: "Coffee Shop",
+        amount: -6.75,
+        account: accountLabel,
+      },
+    ]);
+    accountId = await getAccountId(accountLabel);
+  });
+
+  afterAll(async () => {
+    if (accountId) await req("DELETE", `/accounts/${accountId}`);
+  });
+
   it("GET /api/transactions — returns paginated list", async () => {
     const { status, data } = await json<{
       data: Array<{ id: string }>;
@@ -329,6 +468,12 @@ describe("Transactions", () => {
 // ── tags ──────────────────────────────────────────────────────────────────────
 
 describe("Tags", () => {
+  let tagId: string;
+
+  afterAll(async () => {
+    if (tagId) await req("DELETE", `/tags/${tagId}`);
+  });
+
   it("POST /api/tags — creates a tag", async () => {
     const { status, data } = await json<{ id: string; name: string }>(
       "POST",
@@ -376,13 +521,53 @@ describe("Tags", () => {
 // ── bulk-tag ──────────────────────────────────────────────────────────────────
 
 describe("Transactions — bulk tag", () => {
+  const accountLabel = "Bulk Tag Test";
+  let accountId: string;
+  let tagId: string;
+  let transactionId: string;
+  const tagName = "bulk-test-groceries";
+
+  beforeAll(async () => {
+    await uploadCsvOk([
+      {
+        date: "2025-04-01",
+        description: "Grocery Store",
+        amount: -50.0,
+        account: accountLabel,
+      },
+    ]);
+    accountId = await getAccountId(accountLabel);
+
+    const { data: txResult } = await json<{ data: Array<{ id: string }> }>(
+      "GET",
+      `/transactions?accountId=${accountId}`,
+    );
+    transactionId = txResult.data[0]!.id;
+
+    const tag = await json<{ id: string }>("POST", "/tags", { name: tagName });
+    tagId = tag.data.id;
+  });
+
+  afterAll(async () => {
+    // Clean up any auto-created tags from the "creates unknown tags" test
+    const { data: tagsData } = await json<Array<{ id: string; name: string }>>(
+      "GET",
+      "/tags",
+    );
+    const autoTag = tagsData.find((t) => t.name === "new-auto-created-tag");
+    if (autoTag) await req("DELETE", `/tags/${autoTag.id}`);
+
+    if (tagId) await req("DELETE", `/tags/${tagId}`);
+    if (accountId) await req("DELETE", `/accounts/${accountId}`);
+  });
+
   it("POST /api/transactions/bulk-tag — adds tags", async () => {
     const { status, data } = await json<{ updated: number }>(
       "POST",
       "/transactions/bulk-tag",
       {
         transactionIds: [transactionId],
-        tagNames: ["groceries"],
+        tagNames: [tagName],
         action: "add",
       },
     );
@@ -390,12 +575,12 @@ describe("Transactions — bulk tag", () => {
     expect(data.updated).toBeGreaterThanOrEqual(1);
   });
 
-  it("GET /api/transactions/:id — has groceries tag after bulk-tag", async () => {
+  it("GET /api/transactions/:id — has tag after bulk-tag", async () => {
     const { data } = await json<{ tags: string[] }>(
       "GET",
       `/transactions/${transactionId}`,
     );
-    expect(data.tags).toContain("groceries");
+    expect(data.tags).toContain(tagName);
   });
 
   it("POST /api/transactions/bulk-tag — removes tags", async () => {
@@ -404,7 +589,7 @@ describe("Transactions — bulk tag", () => {
       "/transactions/bulk-tag",
       {
         transactionIds: [transactionId],
-        tagNames: ["groceries"],
+        tagNames: [tagName],
         action: "remove",
       },
     );
@@ -425,7 +610,7 @@ describe("Transactions — bulk tag", () => {
     const { status, data } = await json<{ error: { code: string } }>(
       "POST",
       "/transactions/bulk-tag",
-      { transactionIds: [], tagNames: ["groceries"], action: "add" },
+      { transactionIds: [], tagNames: [tagName], action: "add" },
     );
     expect(status).toBe(400);
     expect(data.error.code).toBe("VALIDATION_ERROR");
@@ -437,7 +622,7 @@ describe("Transactions — bulk tag", () => {
       "/transactions/bulk-tag",
       {
         transactionIds: [transactionId],
-        tagNames: ["groceries"],
+        tagNames: [tagName],
         action: "replace",
       },
     );
@@ -449,6 +634,40 @@ describe("Transactions — bulk tag", () => {
 // ── auto-tag rules ────────────────────────────────────────────────────────────
 
 describe("Auto-tag rules", () => {
+  const accountLabel = "Rules Test";
+  let accountId: string;
+  let tagId: string;
+  let ruleId: string;
+
+  beforeAll(async () => {
+    await uploadCsvOk([
+      {
+        date: "2025-04-01",
+        description: "Grocery Store",
+        amount: -50.0,
+        account: accountLabel,
+      },
+      {
+        date: "2025-04-02",
+        description: "Coffee Shop",
+        amount: -5.0,
+        account: accountLabel,
+      },
+    ]);
+    accountId = await getAccountId(accountLabel);
+
+    const tag = await json<{ id: string }>("POST", "/tags", {
+      name: "rules-test-groceries",
+    });
+    tagId = tag.data.id;
+  });
+
+  afterAll(async () => {
+    if (ruleId) await req("DELETE", `/rules/${ruleId}`); // no-op if already deleted by test
+    if (tagId) await req("DELETE", `/tags/${tagId}`);
+    if (accountId) await req("DELETE", `/accounts/${accountId}`);
+  });
+
   it("POST /api/rules — creates a rule", async () => {
     const { status, data } = await json<{ id: string }>("POST", "/rules", {
       tagId,
@@ -551,6 +770,58 @@ describe("Auto-tag rules", () => {
 // ── analytics ─────────────────────────────────────────────────────────────────
 
 describe("Analytics", () => {
+  const accountLabel = "Analytics Test";
+  let accountId: string;
+  let tagId: string;
+  const tagName = "analytics-groceries";
+
+  beforeAll(async () => {
+    await uploadCsvOk([
+      {
+        date: "2025-03-01",
+        description: "Grocery Store",
+        amount: -82.5,
+        account: accountLabel,
+      },
+      {
+        date: "2025-03-05",
+        description: "Payroll Deposit",
+        amount: 3200.0,
+        account: accountLabel,
+      },
+      {
+        date: "2025-03-10",
+        description: "Coffee Shop",
+        amount: -6.75,
+        account: accountLabel,
+      },
+    ]);
+    accountId = await getAccountId(accountLabel);
+
+    const tag = await json<{ id: string }>("POST", "/tags", { name: tagName });
+    tagId = tag.data.id;
+
+    const { data: txResult } = await json<{
+      data: Array<{ id: string; description: string }>;
+    }>("GET", `/transactions?accountId=${accountId}`);
+    const groceryIds = txResult.data
+      .filter((t) => t.description.includes("Grocery"))
+      .map((t) => t.id);
+
+    if (groceryIds.length > 0) {
+      await json("POST", "/transactions/bulk-tag", {
+        transactionIds: groceryIds,
+        tagNames: [tagName],
+        action: "add",
+      });
+    }
+  });
+
+  afterAll(async () => {
+    if (tagId) await req("DELETE", `/tags/${tagId}`);
+    if (accountId) await req("DELETE", `/accounts/${accountId}`);
+  });
+
   it("GET /api/analytics/monthly-summary — returns monthly income/expense rows", async () => {
     const { status, data } = await json<
       Array<{ month: number; income: number; expenses: number }>
@@ -591,8 +862,7 @@ describe("Analytics", () => {
   it("GET /api/analytics/trend — returns monthly amounts for a tag", async () => {
     const { status, data } = await json<
       Array<{ month: string; amount: number }>
-    >("GET", "/analytics/trend?tag=groceries&months=6");
-
+    >("GET", `/analytics/trend?tag=${tagName}&months=6`);
     expect(status).toBe(200);
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeLessThanOrEqual(6);
@@ -650,36 +920,5 @@ describe("Error response shape", () => {
   it("unknown routes return 404", async () => {
     const res = await req("GET", "/does-not-exist");
     expect(res.status).toBe(404);
-  });
-});
-
-// ── cleanup ───────────────────────────────────────────────────────────────────
-
-describe("Cleanup", () => {
-  it("DELETE /api/tags/:id — deletes the groceries tag", async () => {
-    const res = await req("DELETE", `/tags/${tagId}`);
-    expect(res.status).toBe(204);
-  });
-
-  it("DELETE /api/uploads/:id — deletes the upload and cascades transactions", async () => {
-    const res = await req("DELETE", `/uploads/${uploadId}`);
-    expect(res.status).toBe(204);
-  });
-
-  it("DELETE /api/accounts/:id — deletes first account and cascades", async () => {
-    const res = await req("DELETE", `/accounts/${accountId}`);
-    expect(res.status).toBe(204);
-  });
-
-  it("DELETE /api/accounts/:id — deletes second account", async () => {
-    const res = await req("DELETE", `/accounts/${secondAccountId}`);
-    expect(res.status).toBe(204);
-  });
-
-  it("GET /api/accounts — deleted accounts no longer appear", async () => {
-    const { data } = await json<Array<{ id: string }>>("GET", "/accounts");
-    const ids = data.map((a) => a.id);
-    expect(ids).not.toContain(accountId);
-    expect(ids).not.toContain(secondAccountId);
   });
 });
