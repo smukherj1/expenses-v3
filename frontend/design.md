@@ -8,6 +8,7 @@
 - **Recharts** — charting library
 - **TanStack Query (React Query)** — server state management, caching, refetching
 - **Tailwind CSS 4** — utility-first styling
+- **Runtime**- Bun
 
 ## Routing
 
