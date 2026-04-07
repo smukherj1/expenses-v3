@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { chromium, type Browser, type Page } from "playwright";
 
-const FRONTEND = process.env.FRONTEND_URL ?? "http://localhost:5173";
+const FRONTEND = process.env.FRONTEND_URL ?? "http://localhost:8080";
 const API = `${process.env.BACKEND_URL ?? "http://localhost:3000"}/api`;
 
 // ── helpers ──────────────────────────────────────────────────────────────────

@@ -25,6 +25,30 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+  backend:
+    build: ./backend
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: expenses
+      PGUSER: expenses
+      PGPASSWORD: expenses
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:8080"
+    environment:
+      API_URL: "http://backend:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
 
 volumes:
   postgres_data:
