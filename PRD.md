@@ -73,61 +73,6 @@ All charts are filterable by date range, account, and tags.
 /settings               -> Account labels, preferences
 ```
 
-## Data Model (Conceptual)
-
-```
-User
-  id          UUID
-  name        string
-  email       string        -- unique
-  created_at  timestamp
-  -- A default user is seeded; auth is added later.
-
-Account
-  id          UUID
-  user_id     UUID (FK -> User)
-  label       string        -- e.g. "TD Chequing"
-  created_at  timestamp
-
-Transaction
-  id          UUID
-  account_id  UUID (FK -> Account)
-  upload_id   UUID (FK -> Upload)   -- nullable, for manual entries later
-  date        date
-  description string
-  amount      decimal       -- positive = income, negative = expense
-  currency    string        -- default "CAD"; only "CAD" accepted for now
-  created_at  timestamp
-
-Tag
-  id          UUID
-  user_id     UUID (FK -> User)
-  name        string        -- unique per user
-
-TransactionTag            -- join table
-  transaction_id  UUID (FK)
-  tag_id          UUID (FK)
-
-Upload
-  id          UUID
-  account_id  UUID (FK -> Account)
-  filename    string
-  row_count   integer
-  uploaded_at timestamp
-
-AutoTagRule
-  id          UUID
-  user_id     UUID (FK -> User)
-  tag_id      UUID (FK -> Tag)
-
-AutoTagRuleCondition      -- one rule has 1..N conditions, all must match (AND)
-  id          UUID
-  rule_id     UUID (FK -> AutoTagRule)
-  match_field enum(description, amount)
-  match_type  enum(contains, exact, regex, gt, lt)
-  match_value string
-```
-
 ## Non-Functional Requirements
 
 - **Auth:** Deferred. A default user is seeded in the database. All entities reference `user_id` so multi-tenancy can be added later without schema changes.
@@ -135,17 +80,6 @@ AutoTagRuleCondition      -- one rule has 1..N conditions, all must match (AND)
 - **File size:** Support uploads up to 10 MB per file.
 - **Browser support:** Modern evergreen browsers (Chrome, Firefox, Safari, Edge).
 - **Responsiveness:** Usable on desktop and tablet; mobile is a stretch goal.
-
-## Milestones
-
-| #   | Milestone             | Scope                                                                                       |
-| --- | --------------------- | ------------------------------------------------------------------------------------------- |
-| 1   | **Upload & Store**    | Account creation, file upload (CSV/JSON), parsing, transaction storage, duplicate warnings. |
-| 2   | **Search & Tag**      | Transaction list with search/filter, manual tagging, bulk tagging.                          |
-| 3   | **Visualize**         | Dashboard with monthly bar chart, category pie chart, trend line, top-N table.              |
-| 4   | **Auto-tag Rules**    | Rule CRUD with AND conditions, retroactive application, auto-apply on upload.               |
-| 5   | **Auth & Multi-user** | User registration/login, replace default user with real auth.                               |
-| 6   | **Polish & Deploy**   | Responsive layout, error handling, Docker production config, CI.                            |
 
 ## Deferred Features
 
