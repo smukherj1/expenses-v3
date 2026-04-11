@@ -1,6 +1,7 @@
 out
 node_modules
 data
+.codex
 
 frontend/dist
 frontend/node_modules

@@ -1,9 +1,12 @@
 import { zValidator } from "@hono/zod-validator";
-import type { ZodSchema } from "zod";
+import type { ZodType } from "zod/v4";
 
 type Target = "json" | "query" | "param" | "form" | "header";
 
-export function validate(target: Target, schema: ZodSchema) {
+export function validate<TTarget extends Target, TSchema extends ZodType>(
+  target: TTarget,
+  schema: TSchema,
+) {
   return zValidator(target, schema, (result, c) => {
     if (!result.success) {
       return c.json(
