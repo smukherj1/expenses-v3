@@ -533,6 +533,7 @@ describe("Auto-tag rules", () => {
     await page.close();
     await deleteAccountByLabel(accountLabel);
     if (tagId) await apiReq("DELETE", `/tags/${tagId}`);
+    else await deleteTagByName(tagName);
   });
 
   it("shows the Rules page heading", async () => {
@@ -596,6 +597,10 @@ describe("Settings", () => {
   let page: Page;
 
   beforeAll(async () => {
+    // Clean up any leftover account from a previous run so the upload
+    // always creates it fresh and the account is guaranteed to be in the list.
+    await deleteAccountByLabel(accountLabel);
+
     const csv = makeCsv([
       {
         date: "2025-11-01",
@@ -615,9 +620,12 @@ describe("Settings", () => {
     page = await browser.newPage();
     await page.goto(`${FRONTEND}/settings`);
     await page.waitForLoadState("networkidle");
-    await page.waitForSelector('[data-testid="accounts-list"]', {
-      timeout: 10000,
-    });
+    // Wait for the specific account row, not just any accounts-list, so we
+    // know the seeded account is actually visible before the tests run.
+    await page
+      .locator('[data-testid="accounts-list"] li')
+      .filter({ hasText: accountLabel })
+      .waitFor({ state: "visible", timeout: 10000 });
   });
 
   afterAll(async () => {
@@ -637,15 +645,18 @@ describe("Settings", () => {
       .filter({ hasText: accountLabel });
     await accountRow.locator('[data-testid="delete-account-btn"]').click();
 
-    await page.waitForSelector('[data-testid="confirm-ok"]', { timeout: 5000 });
+    await page.waitForSelector('[data-testid="confirm-ok"]', { timeout: 8000 });
     await page.locator('[data-testid="confirm-ok"]').click();
 
-    await page.waitForTimeout(1000);
-    const listText =
-      (await page
-        .locator('[data-testid="accounts-list"]')
-        .textContent()
-        .catch(() => "")) ?? "";
-    expect(listText).not.toContain(accountLabel);
+    // Wait until the account disappears from the list (or the list itself
+    // disappears when no accounts remain) rather than using a fixed sleep.
+    await page.waitForFunction(
+      (label) =>
+        !document
+          .querySelector('[data-testid="accounts-list"]')
+          ?.textContent?.includes(label),
+      accountLabel,
+      { timeout: 10000 },
+    );
   });
 });

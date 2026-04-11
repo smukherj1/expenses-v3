@@ -145,9 +145,15 @@ describe("Uploads", () => {
   const chequingLabel = "Uploads Test — Chequing";
   const visaLabel = "Uploads Test — Visa";
   const savingsLabel = "Uploads Test — Savings";
+  const someAccountLabel = "Some Account";
 
   afterAll(async () => {
-    for (const label of [chequingLabel, visaLabel, savingsLabel]) {
+    for (const label of [
+      chequingLabel,
+      visaLabel,
+      savingsLabel,
+      someAccountLabel,
+    ]) {
       await deleteAccountByLabel(label);
     }
   });
@@ -244,8 +250,7 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — rejects non-CAD currency", async () => {
-    const csv =
-      "date,description,amount,currency,account\n2025-03-01,Something,-10.00,USD,Some Account";
+    const csv = `date,description,amount,currency,account\n2025-03-01,Something,-10.00,USD,${someAccountLabel}`;
     const form = new FormData();
     form.append("file", new Blob([csv], { type: "text/csv" }), "usd.csv");
     const res = await fetch(`${API}/uploads`, { method: "POST", body: form });

@@ -128,15 +128,15 @@ export async function uploadFile(
     throw new ValidationError(`File contains invalid rows: ${messages}`);
   }
 
-  const resolvedTxns = await upsertAccounts(userId, parsedRows);
-
-  // Check for non-CAD currencies
-  const nonCad = resolvedTxns.find((r) => r.currency !== "CAD");
+  // Check for non-CAD currencies before creating any accounts
+  const nonCad = parsedRows.find((r) => r.currency !== "CAD");
   if (nonCad) {
     throw new UnsupportedCurrencyError(
       `Unsupported currency: ${nonCad.currency}. Only CAD is supported.`,
     );
   }
+
+  const resolvedTxns = await upsertAccounts(userId, parsedRows);
 
   // Check for duplicates: (date, amount, description) match
   const existingTxns = await findExistingTransactions(userId, resolvedTxns);
