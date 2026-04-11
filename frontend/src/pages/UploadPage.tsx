@@ -54,16 +54,19 @@ export default function UploadPage() {
         <div className="bg-white rounded-xl border p-5 text-sm text-gray-600">
           <p className="font-semibold text-gray-800 mb-2">Supported formats</p>
           <p className="mb-2">
+            Dates must be{" "}
+            <code className="bg-gray-100 px-1 rounded">yyyy-mm-dd</code> and
+            currency must be{" "}
+            <code className="bg-gray-100 px-1 rounded">CAD</code>.
+          </p>
+          <p className="mb-2">
             <strong>CSV</strong> — columns:{" "}
             <code className="bg-gray-100 px-1 rounded">
               date, description, amount, currency, account
             </code>
           </p>
-          <p>
-            <strong>JSON</strong> — array of objects with the same fields. Dates
-            must be <code className="bg-gray-100 px-1 rounded">yyyy-mm-dd</code>
-            . Currency must be{" "}
-            <code className="bg-gray-100 px-1 rounded">CAD</code>.
+          <p className="mb-2">
+            <strong>JSON</strong> — array of objects with the same fields.
           </p>
         </div>
 
