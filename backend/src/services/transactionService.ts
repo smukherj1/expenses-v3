@@ -198,6 +198,29 @@ export async function deleteTransaction(userId: string, id: string) {
   await db.delete(transactions).where(eq(transactions.id, id));
 }
 
+export async function bulkDeleteTransactions(
+  userId: string,
+  transactionIds: string[],
+) {
+  const uniqueIds = [...new Set(transactionIds)];
+
+  const ownedRows = await db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+    .where(
+      and(eq(accounts.userId, userId), inArray(transactions.id, uniqueIds)),
+    );
+
+  if (ownedRows.length !== uniqueIds.length) {
+    throw new NotFoundError("One or more transactions not found");
+  }
+
+  await db.delete(transactions).where(inArray(transactions.id, uniqueIds));
+
+  return { deleted: uniqueIds.length };
+}
+
 export async function bulkTag(
   userId: string,
   transactionIds: string[],

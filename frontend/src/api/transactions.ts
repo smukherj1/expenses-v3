@@ -62,6 +62,14 @@ export function deleteTransaction(id: string): Promise<void> {
   return del<void>(`/transactions/${id}`);
 }
 
+export function bulkDeleteTransactions(
+  transactionIds: string[],
+): Promise<{ deleted: number }> {
+  return post<{ deleted: number }>("/transactions/bulk-delete", {
+    transactionIds,
+  });
+}
+
 export function bulkTag(
   transactionIds: string[],
   tagNames: string[],

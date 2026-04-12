@@ -3,12 +3,14 @@ import {
   listTransactionsSchema,
   updateTransactionSchema,
   bulkTagSchema,
+  bulkDeleteSchema,
 } from "../schemas/transaction.js";
 import {
   listTransactions,
   getTransactionById,
   updateTransaction,
   deleteTransaction,
+  bulkDeleteTransactions,
   bulkTag,
 } from "../services/transactionService.js";
 import { validate } from "../middleware/validate.js";
@@ -26,6 +28,13 @@ app.post("/bulk-tag", validate("json", bulkTagSchema), async (c) => {
   const userId = c.get("userId");
   const { transactionIds, tagNames, action } = c.req.valid("json");
   const result = await bulkTag(userId, transactionIds, tagNames, action);
+  return c.json(result);
+});
+
+app.post("/bulk-delete", validate("json", bulkDeleteSchema), async (c) => {
+  const userId = c.get("userId");
+  const { transactionIds } = c.req.valid("json");
+  const result = await bulkDeleteTransactions(userId, transactionIds);
   return c.json(result);
 });
 

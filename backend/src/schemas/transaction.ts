@@ -25,3 +25,7 @@ export const bulkTagSchema = z.object({
   tagNames: z.array(z.string().min(1)).min(1),
   action: z.enum(["add", "remove"]),
 });
+
+export const bulkDeleteSchema = z.object({
+  transactionIds: z.array(z.string().uuid()).min(1),
+});

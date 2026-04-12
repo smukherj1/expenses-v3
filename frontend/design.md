@@ -50,9 +50,9 @@ A `<RootLayout />` wraps all routes with the app shell (sidebar nav, header).
           ├── <TransactionsPage />
           │   ├── <SearchBar />             # Full-text search input
           │   ├── <FilterPanel />           # Date, amount, account, tags, type filters
-          │   ├── <TransactionTable />      # Sortable, paginated table
+          │   ├── <TransactionTable />      # Sortable, paginated table with row selection
           │   │   └── <TransactionRow />
-          │   └── <BulkTagBar />            # Appears when rows are selected
+          │   └── <SelectionActionBar />     # Appears when rows are selected; bulk tag + bulk delete
           │
           ├── <TransactionDetailPage />
           │   ├── <TransactionInfo />       # Date, description, amount, account
@@ -77,16 +77,16 @@ A `<RootLayout />` wraps all routes with the app shell (sidebar nav, header).
 
 ## Shared Components
 
-| Component           | Purpose                                                          |
-| ------------------- | ---------------------------------------------------------------- |
-| `<Sidebar />`       | App navigation, highlights active route                          |
-| `<Header />`        | Page title derived from route, optional breadcrumbs              |
-| `<Pagination />`    | Page controls, used by TransactionTable and TopNTable            |
-| `<TagBadge />`      | Displays a tag name with optional remove button                  |
-| `<TagInput />`      | Autocomplete input for adding tags (queries GET `/api/tags`)     |
-| `<EmptyState />`    | Placeholder when no data exists                                  |
-| `<ConfirmDialog />` | Confirmation modal for destructive actions (delete upload, etc.) |
-| `<FileDropzone />`  | Drag-and-drop file upload area with format validation            |
+| Component           | Purpose                                                                       |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `<Sidebar />`       | App navigation, highlights active route                                       |
+| `<Header />`        | Page title derived from route, optional breadcrumbs                           |
+| `<Pagination />`    | Page controls, used by TransactionTable and TopNTable                         |
+| `<TagBadge />`      | Displays a tag name with optional remove button                               |
+| `<TagInput />`      | Autocomplete input for adding tags (queries GET `/api/tags`)                  |
+| `<EmptyState />`    | Placeholder when no data exists                                               |
+| `<ConfirmDialog />` | Confirmation modal for destructive actions (delete upload, bulk delete, etc.) |
+| `<FileDropzone />`  | Drag-and-drop file upload area with format validation                         |
 
 ## API Client Layer
 
@@ -97,7 +97,7 @@ src/api/
   client.ts           # Base fetch wrapper (base URL, error handling, JSON parsing)
   accounts.ts         # getAccounts, createAccount, deleteAccount
   uploads.ts          # uploadFile, getUploads, deleteUpload
-  transactions.ts     # searchTransactions, getTransaction, updateTransaction, bulkTag
+  transactions.ts     # searchTransactions, getTransaction, updateTransaction, bulkTag, bulkDeleteTransactions
   tags.ts             # getTags, createTag, deleteTag
   rules.ts            # getRules, createRule, updateRule, deleteRule, applyRule, applyAllRules
   analytics.ts        # getMonthlySummary, getCategoryBreakdown, getTrend, getTopTransactions
@@ -110,7 +110,7 @@ Each function returns typed data; errors throw an `ApiError` with `code` and `me
 TanStack Query handles all server state:
 
 - **Query keys** follow the pattern: `['resource', ...params]` (e.g. `['transactions', { q, page }]`).
-- **Mutations** invalidate related queries on success (e.g. bulk-tag invalidates `['transactions']`).
+- **Mutations** invalidate related queries on success (e.g. bulk-tag and bulk-delete invalidate `['transactions']`).
 - Stale time: 30s for transaction lists, 5min for tags and accounts.
 
 ## Key Interactions
@@ -123,12 +123,12 @@ TanStack Query handles all server state:
 4. Backend responds with parsed count + duplicate warnings.
 5. Frontend shows result summary and refreshes upload history.
 
-### Bulk Tagging Flow
+### Bulk Tagging and Deletion Flow
 
 1. User checks rows in TransactionTable (checkboxes).
-2. BulkTagBar appears at top with tag input + "Add" / "Remove" buttons.
-3. On submit, calls `POST /api/transactions/bulk-tag`.
-4. Table refreshes via query invalidation.
+2. SelectionActionBar appears at top with tag input + "Add" / "Remove" buttons and a destructive bulk delete action.
+3. On submit, calls `POST /api/transactions/bulk-tag` or `POST /api/transactions/bulk-delete`.
+4. Table refreshes via query invalidation and selection clears.
 
 ### Chart Drill-Down
 

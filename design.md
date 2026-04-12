@@ -49,7 +49,7 @@ Key capabilities:
 
 - **Dashboard** — Summary cards (income, expenses, net) with monthly bar chart and category pie chart
 - **Upload** — Account selection, drag-and-drop file upload, parsed row preview with duplicate warnings, upload history
-- **Transactions** — Full-text search, multi-field filters, sortable/paginated table, bulk tagging via row selection
+- **Transactions** — Full-text search, multi-field filters, sortable/paginated table, bulk tagging and bulk deletion via row selection
 - **Transaction detail** — View and edit tags for a single transaction
 - **Rules** — Create/edit/delete auto-tag rules with AND conditions, apply retroactively
 - **Analytics** — Filterable charts: monthly bar, category pie, trend line, top-N table; drill-down to filtered transaction list
@@ -63,7 +63,7 @@ Key capabilities:
 
 - **Accounts** — CRUD for user-defined account labels (e.g. "TD Chequing")
 - **Uploads** — Multipart file upload (CSV/JSON), parsing, duplicate detection, auto-tag on ingest
-- **Transactions** — Full-text search, multi-field filtering, pagination, sorting, bulk tagging
+- **Transactions** — Full-text search, multi-field filtering, pagination, sorting, bulk tagging, bulk deletion
 - **Tags** — User-scoped string tags, applied to transactions individually or in bulk
 - **Auto-tag rules** — Condition-based rules (AND logic) that auto-apply tags; can run retroactively
 - **Analytics** — Aggregation queries for monthly summaries, category breakdowns, trends, and top-N lists

@@ -4,12 +4,14 @@ import { Link, useSearchParams } from "react-router";
 import {
   listTransactions,
   bulkTag,
+  bulkDeleteTransactions,
   type ListParams,
 } from "../api/transactions.ts";
 import { useQuery as useTagsQuery } from "@tanstack/react-query";
 import { getTags } from "../api/tags.ts";
 import Pagination from "../components/Pagination.tsx";
 import TagBadge from "../components/TagBadge.tsx";
+import ConfirmDialog from "../components/ConfirmDialog.tsx";
 
 export default function TransactionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -24,6 +26,7 @@ export default function TransactionsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkTagInput, setBulkTagInput] = useState("");
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string[] | null>(null);
 
   const params: ListParams = {
     q: q || undefined,
@@ -45,6 +48,9 @@ export default function TransactionsPage() {
     staleTime: 5 * 60_000,
   });
 
+  const rows = data?.data ?? [];
+  const allSelected = rows.length > 0 && selectedIds.size === rows.length;
+
   const bulkMutation = useMutation({
     mutationFn: ({
       tagNames,
@@ -57,6 +63,27 @@ export default function TransactionsPage() {
       setBulkTagInput("");
       setBulkError(null);
       setSelectedIds(new Set());
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+    },
+    onError: (e: Error) => setBulkError(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (ids: string[]) => bulkDeleteTransactions(ids),
+    onSuccess: (_result, deletedIds) => {
+      const deletedCount = deletedIds.length;
+      const shouldGoPrevPage =
+        page > 1 && rows.length > 0 && deletedCount >= rows.length;
+
+      setDeleteTarget(null);
+      setSelectedIds(new Set());
+      setBulkTagInput("");
+      setBulkError(null);
+
+      if (shouldGoPrevPage) {
+        setParam("page", String(page - 1));
+      }
+
       qc.invalidateQueries({ queryKey: ["transactions"] });
     },
     onError: (e: Error) => setBulkError(e.message),
@@ -82,7 +109,6 @@ export default function TransactionsPage() {
   }
 
   function toggleAll() {
-    const rows = data?.data ?? [];
     if (selectedIds.size === rows.length) {
       setSelectedIds(new Set());
     } else {
@@ -101,9 +127,6 @@ export default function TransactionsPage() {
     }
     bulkMutation.mutate({ tagNames: names, action });
   }
-
-  const rows = data?.data ?? [];
-  const allSelected = rows.length > 0 && selectedIds.size === rows.length;
 
   return (
     <div>
@@ -195,6 +218,14 @@ export default function TransactionsPage() {
             data-testid="bulk-tag-remove"
           >
             Remove tags
+          </button>
+          <button
+            onClick={() => setDeleteTarget([...selectedIds])}
+            disabled={deleteMutation.isPending}
+            className="px-3 py-1.5 text-sm border border-red-300 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50"
+            data-testid="bulk-delete"
+          >
+            Delete selected
           </button>
           {bulkError && (
             <span className="text-sm text-red-600" data-testid="bulk-tag-error">
@@ -299,6 +330,17 @@ export default function TransactionsPage() {
         limit={50}
         onPage={(p) => setParam("page", String(p))}
       />
+
+      {deleteTarget && (
+        <ConfirmDialog
+          message={`Delete ${deleteTarget.length} selected transaction${
+            deleteTarget.length === 1 ? "" : "s"
+          }? This cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={() => deleteMutation.mutate(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

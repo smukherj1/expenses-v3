@@ -488,6 +488,139 @@ describe("Tagging — bulk", () => {
   });
 });
 
+// ── Deletion — list page ─────────────────────────────────────────────────────
+
+describe("Deletion — list page", () => {
+  const singleAccount = "E2E Delete Single";
+  const bulkAccount = "E2E Delete Bulk";
+  let page: Page;
+
+  beforeAll(async () => {
+    const singleCsv = makeCsv([
+      {
+        date: "2025-11-01",
+        description: "Frontend Delete Single Alpha",
+        amount: -11.0,
+        account: singleAccount,
+      },
+      {
+        date: "2025-11-02",
+        description: "Frontend Delete Single Beta",
+        amount: -12.0,
+        account: singleAccount,
+      },
+    ]);
+    const bulkCsv = makeCsv([
+      {
+        date: "2025-11-03",
+        description: "Frontend Delete Bulk Alpha",
+        amount: -21.0,
+        account: bulkAccount,
+      },
+      {
+        date: "2025-11-04",
+        description: "Frontend Delete Bulk Beta",
+        amount: -22.0,
+        account: bulkAccount,
+      },
+    ]);
+
+    const form1 = new FormData();
+    form1.append(
+      "file",
+      new Blob([singleCsv], { type: "text/csv" }),
+      "single.csv",
+    );
+    await fetch(`${API}/uploads`, { method: "POST", body: form1 });
+
+    const form2 = new FormData();
+    form2.append("file", new Blob([bulkCsv], { type: "text/csv" }), "bulk.csv");
+    await fetch(`${API}/uploads`, { method: "POST", body: form2 });
+
+    page = await browser.newPage();
+    await page.goto(`${FRONTEND}/transactions`);
+    await page.waitForLoadState("networkidle");
+    await page.waitForSelector('[data-testid="transaction-row"]', {
+      timeout: 10000,
+    });
+  });
+
+  afterAll(async () => {
+    await page.close();
+    await deleteAccountByLabel(singleAccount);
+    await deleteAccountByLabel(bulkAccount);
+  });
+
+  it("deletes a single selected transaction from the list", async () => {
+    await page
+      .locator('[data-testid="search-input"]')
+      .fill("Frontend Delete Single");
+    await page.waitForTimeout(800);
+
+    const checkbox = page
+      .locator('[data-testid="transaction-row"] input[type="checkbox"]')
+      .first();
+    await checkbox.click();
+    await page.waitForSelector('[data-testid="bulk-tag-bar"]', {
+      timeout: 5000,
+    });
+    await page.locator('[data-testid="bulk-delete"]').click();
+    await page.waitForSelector('[data-testid="confirm-dialog"]', {
+      timeout: 5000,
+    });
+    await page.locator('[data-testid="confirm-ok"]').click();
+
+    await page.waitForFunction(
+      () => !document.querySelector('[data-testid="confirm-dialog"]'),
+      { timeout: 8000 },
+    );
+
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('[data-testid="transaction-row"]').length ===
+        1,
+      { timeout: 8000 },
+    );
+
+    const count = await page.locator('[data-testid="transaction-row"]').count();
+    expect(count).toBe(1);
+  });
+
+  it("deletes multiple selected transactions from the list", async () => {
+    await page
+      .locator('[data-testid="search-input"]')
+      .fill("Frontend Delete Bulk");
+    await page.waitForTimeout(800);
+
+    const checkboxes = page.locator(
+      '[data-testid="transaction-row"] input[type="checkbox"]',
+    );
+    await checkboxes.nth(0).click();
+    await checkboxes.nth(1).click();
+
+    await page.waitForSelector('[data-testid="bulk-tag-bar"]', {
+      timeout: 5000,
+    });
+    await page.locator('[data-testid="bulk-delete"]').click();
+    await page.waitForSelector('[data-testid="confirm-dialog"]', {
+      timeout: 5000,
+    });
+    await page.locator('[data-testid="confirm-ok"]').click();
+
+    await page.waitForFunction(
+      () => !document.querySelector('[data-testid="confirm-dialog"]'),
+      { timeout: 8000 },
+    );
+    await page.waitForFunction(
+      () => document.querySelector('[data-testid="empty-state"]'),
+      { timeout: 8000 },
+    );
+
+    const emptyVisible = await isVisible(page, '[data-testid="empty-state"]');
+    expect(emptyVisible).toBe(true);
+  });
+});
+
 // ── Auto-tag rules ────────────────────────────────────────────────────────────
 
 describe("Auto-tag rules", () => {

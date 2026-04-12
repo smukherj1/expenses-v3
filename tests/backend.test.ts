@@ -420,7 +420,8 @@ describe("Transactions", () => {
   it("GET /api/transactions — full-text search via q param", async () => {
     const { status, data } = await json<{
       data: Array<{ description: string }>;
-    }>("GET", "/transactions?q=Grocery");
+      // Also filter by account ID to only fetch transactions uploaded in this test.
+    }>("GET", `/transactions?q=Grocery&accountId=${accountId}`);
     expect(status).toBe(200);
     expect(data.data.length).toBeGreaterThan(0);
     for (const txn of data.data) {
@@ -633,6 +634,96 @@ describe("Transactions — bulk tag", () => {
     );
     expect(status).toBe(400);
     expect(data.error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
+// ── bulk-delete ──────────────────────────────────────────────────────────────
+
+describe("Transactions — bulk delete", () => {
+  const accountLabel = "Bulk Delete Test";
+  let accountId: string;
+  let transactionIds: string[] = [];
+
+  beforeAll(async () => {
+    await uploadCsvOk([
+      {
+        date: "2025-05-01",
+        description: "Delete Me 1",
+        amount: "-10.0",
+        account: accountLabel,
+      },
+      {
+        date: "2025-05-02",
+        description: "Delete Me 2",
+        amount: "-20.0",
+        account: accountLabel,
+      },
+    ]);
+    accountId = await getAccountId(accountLabel);
+
+    const { data: txResult } = await json<{ data: Array<{ id: string }> }>(
+      "GET",
+      `/transactions?accountId=${accountId}`,
+    );
+    transactionIds = txResult.data.map((t) => t.id);
+  });
+
+  afterAll(async () => {
+    if (accountId) await req("DELETE", `/accounts/${accountId}`);
+  });
+
+  it("POST /api/transactions/bulk-delete — deletes multiple transactions", async () => {
+    const { status, data } = await json<{ deleted: number }>(
+      "POST",
+      "/transactions/bulk-delete",
+      { transactionIds },
+    );
+    expect(status).toBe(200);
+    expect(data.deleted).toBe(transactionIds.length);
+  });
+
+  it("GET /api/transactions — no longer returns deleted rows", async () => {
+    const { data } = await json<{ data: Array<{ id: string }> }>(
+      "GET",
+      `/transactions?accountId=${accountId}`,
+    );
+    expect(data.data).toHaveLength(0);
+  });
+
+  it("POST /api/transactions/bulk-delete — rejects missing ids without deleting anything", async () => {
+    const accountLabel2 = "Bulk Delete Safety";
+    await uploadCsvOk([
+      {
+        date: "2025-05-03",
+        description: "Keep Me",
+        amount: "-30.0",
+        account: accountLabel2,
+      },
+    ]);
+    const safeAccountId = await getAccountId(accountLabel2);
+    const { data: txResult } = await json<{ data: Array<{ id: string }> }>(
+      "GET",
+      `/transactions?accountId=${safeAccountId}`,
+    );
+    const keepId = txResult.data[0]!.id;
+    const beforeCount = txResult.data.length;
+
+    const { status, data } = await json<{ error: { code: string } }>(
+      "POST",
+      "/transactions/bulk-delete",
+      { transactionIds: [keepId, "11111111-1111-4111-8111-111111111111"] },
+    );
+
+    expect(status).toBe(404);
+    expect(data.error.code).toBe("NOT_FOUND");
+
+    const after = await json<{ data: Array<{ id: string }> }>(
+      "GET",
+      `/transactions?accountId=${safeAccountId}`,
+    );
+    expect(after.data.data).toHaveLength(beforeCount);
+
+    await req("DELETE", `/accounts/${safeAccountId}`);
   });
 });
 

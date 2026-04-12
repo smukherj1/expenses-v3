@@ -4,8 +4,7 @@
 
 Add transaction deletion to the main transactions workflow so users can:
 
-- delete a single transaction directly from the transactions list
-- delete multiple transactions in one action from the transactions list
+- delete one or more transactions from the transactions list by selecting rows
 
 This document focuses on the frontend work required to satisfy the updated CUJs in `PRD.md`, while calling out the backend changes that are still needed for bulk deletion. The existing delete flow on the transaction detail page remains unchanged.
 
@@ -80,21 +79,6 @@ Deletion changes counts, pagination, charts, and detail views. For the initial i
 ## Proposed UX
 
 ## 1. Transactions list page
-
-### Row-level delete affordance
-
-Add a delete action per row in the transactions table.
-
-Recommended implementation:
-
-- add a rightmost "Actions" column
-- show a small `Delete` button for each row
-- clicking it opens a confirmation dialog for that specific transaction
-
-Why this approach:
-
-- it makes single-item deletion discoverable in the main search/filter workflow
-- it avoids overloading the description link with destructive behavior
 
 ### Selection action bar
 

@@ -27,13 +27,14 @@ Base path: `/api`
 
 ### Transactions
 
-| Method | Path                         | Description                                                                                                                                          |
-| ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/transactions`          | Search/filter transactions (query params: `q`, `dateFrom`, `dateTo`, `amountMin`, `amountMax`, `accountId`, `tags`, `type`, `sort`, `page`, `limit`) |
-| GET    | `/api/transactions/:id`      | Get single transaction with tags                                                                                                                     |
-| PATCH  | `/api/transactions/:id`      | Update transaction (tags, description)                                                                                                               |
-| POST   | `/api/transactions/bulk-tag` | `{ transactionIds[], tagNames[], action: 'add' \| 'remove' }`                                                                                        |
-| DELETE | `/api/transactions/:id`      | Delete transaction                                                                                                                                   |
+| Method | Path                            | Description                                                                                                                                          |
+| ------ | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/transactions`             | Search/filter transactions (query params: `q`, `dateFrom`, `dateTo`, `amountMin`, `amountMax`, `accountId`, `tags`, `type`, `sort`, `page`, `limit`) |
+| GET    | `/api/transactions/:id`         | Get single transaction with tags                                                                                                                     |
+| PATCH  | `/api/transactions/:id`         | Update transaction (tags, description)                                                                                                               |
+| POST   | `/api/transactions/bulk-tag`    | `{ transactionIds[], tagNames[], action: 'add' \| 'remove' }`                                                                                        |
+| POST   | `/api/transactions/bulk-delete` | `{ transactionIds[] }`                                                                                                                               |
+| DELETE | `/api/transactions/:id`         | Delete transaction                                                                                                                                   |
 
 ### Tags
 
@@ -89,7 +90,7 @@ backend/src/
 ├── routes/
 │   ├── accounts.ts           # CRUD for accounts
 │   ├── uploads.ts            # File upload + parsing
-│   ├── transactions.ts       # Search, detail, update, bulk-tag
+│   ├── transactions.ts       # Search, detail, update, bulk-tag, bulk-delete
 │   ├── tags.ts               # CRUD for tags
 │   ├── rules.ts              # CRUD + apply for auto-tag rules
 │   └── analytics.ts          # Aggregation queries for charts
@@ -179,6 +180,14 @@ Query params validated by Zod schema `src/schemas/transaction.ts`.
 
 - `add`: creates tags if they don't exist, inserts into `transaction_tags` (ON CONFLICT DO NOTHING).
 - `remove`: deletes matching rows from `transaction_tags`.
+
+### `POST /api/transactions/bulk-delete`
+
+1. Validate `transactionIds` as a non-empty array of UUIDs.
+2. Load all transactions owned by the current user that match the requested ids.
+3. If any requested id is missing or unauthorized, return `404` and delete nothing.
+4. Delete the matching transactions in one statement.
+5. Return `{ deleted: N }`.
 
 ### `POST /api/rules`
 
