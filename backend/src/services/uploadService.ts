@@ -5,7 +5,8 @@ import {
   UnsupportedCurrencyError,
   ValidationError,
 } from "../middleware/errorHandler.js";
-import { parseCsv, ParsedTransaction } from "../parsers/csv.js";
+import { ParsedTransaction } from "../parsers/schema.js";
+import { parseCsv } from "../parsers/csv.js";
 import { parseJson } from "../parsers/json.js";
 import { applyAllRulesToTransactions } from "./ruleService.js";
 
@@ -97,7 +98,7 @@ async function findExistingTransactions(
     );
   return existing.map((e) => ({
     date: e.date,
-    amount: parseFloat(e.amount),
+    amount: e.amount,
     description: e.description,
     currency: e.currency,
     accountId: e.accountId,

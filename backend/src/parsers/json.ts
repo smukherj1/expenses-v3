@@ -1,16 +1,5 @@
-import { z } from "zod";
-import type { ParsedTransaction } from "./csv.js";
-import { isValidDate } from "./csv.js";
-
-const rowSchema = z.object({
-  date: z.string().min(1).refine(isValidDate, {
-    message: "Invalid date format. Expected yyyy-mm-dd.",
-  }),
-  description: z.string().min(1),
-  amount: z.number(),
-  currency: z.string().default("CAD"),
-  account: z.string().min(1),
-});
+import type { ParsedTransaction } from "./schema.js";
+import { rowSchema } from "./schema.js";
 
 export function parseJson(content: string): {
   transactions: ParsedTransaction[];

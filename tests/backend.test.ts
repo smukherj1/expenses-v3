@@ -33,7 +33,7 @@ async function json<T = unknown>(
 type CsvRow = {
   date: string;
   description: string;
-  amount: number;
+  amount: string;
   account: string;
 };
 
@@ -105,7 +105,7 @@ describe("Accounts", () => {
       {
         date: "2025-03-01",
         description: "Grocery Store",
-        amount: -82.5,
+        amount: "-82.5",
         account: accountLabel,
       },
     ]);
@@ -164,19 +164,19 @@ describe("Uploads", () => {
         {
           date: "2025-03-01",
           description: "Grocery Store",
-          amount: -82.5,
+          amount: "-82.5",
           account: chequingLabel,
         },
         {
           date: "2025-03-05",
           description: "Payroll Deposit",
-          amount: 3200.0,
+          amount: "3200.0",
           account: chequingLabel,
         },
         {
           date: "2025-03-10",
           description: "Coffee Shop",
-          amount: -6.75,
+          amount: "-6.75",
           account: visaLabel,
         },
       ],
@@ -201,13 +201,13 @@ describe("Uploads", () => {
         {
           date: "2025-03-01",
           description: "Grocery Store",
-          amount: -82.5,
+          amount: "-82.5",
           account: chequingLabel,
         },
         {
           date: "2025-03-15",
           description: "Internet Bill",
-          amount: -59.99,
+          amount: "-59.99",
           account: chequingLabel,
         },
       ],
@@ -224,13 +224,13 @@ describe("Uploads", () => {
         {
           date: "2025-04-01",
           description: "Existing Account Txn",
-          amount: -20.0,
+          amount: "-20.0",
           account: chequingLabel,
         },
         {
           date: "2025-04-01",
           description: "New Account Txn",
-          amount: 500.0,
+          amount: "500.0",
           account: savingsLabel,
         },
       ],
@@ -265,7 +265,7 @@ describe("Uploads", () => {
         {
           date: "2025/03/01", // wrong format — must be yyyy-mm-dd
           description: "Something",
-          amount: -10.0,
+          amount: "-10.0",
           account: "Some Account",
         },
       ],
@@ -303,7 +303,7 @@ describe("Uploads", () => {
       {
         date: "2025-04-02",
         description: "JSON Upload Test",
-        amount: -15.0,
+        amount: "-15.0",
         currency: "CAD",
         account: chequingLabel,
       },
@@ -333,19 +333,19 @@ describe("Transactions", () => {
       {
         date: "2025-03-01",
         description: "Grocery Store",
-        amount: -82.5,
+        amount: "-82.5",
         account: accountLabel,
       },
       {
         date: "2025-03-05",
         description: "Payroll Deposit",
-        amount: 3200.0,
+        amount: "3200.0",
         account: accountLabel,
       },
       {
         date: "2025-03-10",
         description: "Coffee Shop",
-        amount: -6.75,
+        amount: "-6.75",
         account: accountLabel,
       },
     ]);
@@ -537,7 +537,7 @@ describe("Transactions — bulk tag", () => {
       {
         date: "2025-04-01",
         description: "Grocery Store",
-        amount: -50.0,
+        amount: "-50.0",
         account: accountLabel,
       },
     ]);
@@ -649,13 +649,13 @@ describe("Auto-tag rules", () => {
       {
         date: "2025-04-01",
         description: "Grocery Store",
-        amount: -50.0,
+        amount: "-50.0",
         account: accountLabel,
       },
       {
         date: "2025-04-02",
         description: "Coffee Shop",
-        amount: -5.0,
+        amount: "-5.0",
         account: accountLabel,
       },
     ]);
@@ -785,19 +785,19 @@ describe("Analytics", () => {
       {
         date: "2025-03-01",
         description: "Grocery Store",
-        amount: -82.5,
+        amount: "-82.5",
         account: accountLabel,
       },
       {
         date: "2025-03-05",
         description: "Payroll Deposit",
-        amount: 3200.0,
+        amount: "3200.0",
         account: accountLabel,
       },
       {
         date: "2025-03-10",
         description: "Coffee Shop",
-        amount: -6.75,
+        amount: "-6.75",
         account: accountLabel,
       },
     ]);

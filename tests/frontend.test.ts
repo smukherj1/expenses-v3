@@ -212,14 +212,14 @@ describe("Upload — JSON", () => {
       {
         date: "2025-07-01",
         description: "Freelance Income",
-        amount: 1200.0,
+        amount: "1200.0",
         currency: "CAD",
         account: accountLabel,
       },
       {
         date: "2025-07-05",
         description: "Rent",
-        amount: -1000.0,
+        amount: "-1000.0",
         currency: "CAD",
         account: accountLabel,
       },
