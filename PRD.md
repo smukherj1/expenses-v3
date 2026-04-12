@@ -40,14 +40,22 @@ A web application that lets users upload financial transactions from bank accoun
   - Transaction type: income (positive) or expense (negative).
 - Results are paginated and sortable by date, amount, or description.
 
-### 3. Tagging & Categorization
+### 3. Data Deletion
+
+- Users can deleted uploaded transactions.
+  - They can use the search and filtering
+    functionality to find transactions to delete.
+  - Transactions can be deleted individually or in bulk by selecting
+    multiple transactions and deleting them in one shot.
+
+### 4. Tagging & Categorization
 
 - Users can apply one or more **string tags** to any transaction (e.g. `groceries`, `rent`, `salary`).
 - Bulk tagging: select multiple transactions from search results and apply/remove tags in one action.
 - Auto-tag rules: users can define rules like "description contains 'WHOLE FOODS' -> tag `groceries`" that are applied automatically on future uploads and can be run retroactively.
 - **Rule composition:** A single auto-tag rule can have multiple conditions combined with AND (all must match). Users achieve OR logic by creating separate rules that apply the same tag.
 
-### 4. Visualization & Analytics
+### 5. Visualization & Analytics
 
 All charts are filterable by date range, account, and tags.
 
