@@ -1,0 +1,30 @@
+ [
+  {
+    "date": "2015-10-16",
+    "description": "Haircut",
+    "amount": "-18.91",
+    "currency": "CAD",
+    "account": "TD Chequing"
+  },
+  {
+    "date": "2015-10-18",
+    "description": "Groceries - Loblaw's #1234",
+    "amount": "-56.78",
+    "currency": "CAD",
+    "account": "BMO MasterCard"
+  },
+  {
+    "date": "2015-10-18",
+    "description": "McDonald's",
+    "amount": "-1.23",
+    "currency": "CAD",
+    "account": "BMO MasterCard"
+  },
+  {
+    "date": "2015-10-20",
+    "description": "ATM withdrawal - TD Bank",
+    "amount": "-50.0",
+    "currency": "CAD",
+    "account": "TD Chequing"
+  }
+]
