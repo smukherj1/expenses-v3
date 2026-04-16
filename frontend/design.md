@@ -96,11 +96,11 @@ A `<RootLayout />` wraps all routes with the app shell (sidebar nav, header).
 src/api/
   client.ts           # Base fetch wrapper (base URL, error handling, JSON parsing)
   accounts.ts         # getAccounts, createAccount, deleteAccount
-  uploads.ts          # uploadFile, getUploads, deleteUpload
+  uploads.ts          # uploadFile, finalizeUpload
   transactions.ts     # searchTransactions, getTransaction, updateTransaction, bulkTag, bulkDeleteTransactions
-  tags.ts             # getTags, createTag, deleteTag
-  rules.ts            # getRules, createRule, updateRule, deleteRule, applyRule, applyAllRules
-  analytics.ts        # getMonthlySummary, getCategoryBreakdown, getTrend, getTopTransactions
+  tags.ts              # getTags, createTag, deleteTag
+  rules.ts             # getRules, createRule, updateRule, deleteRule, applyRule, applyAllRules
+  analytics.ts         # getMonthlySummary, getCategoryBreakdown, getTrend, getTopTransactions
 ```
 
 Each function returns typed data; errors throw an `ApiError` with `code` and `message`.
@@ -117,11 +117,12 @@ TanStack Query handles all server state:
 
 ### Upload Flow
 
-1. User selects account (or creates new one).
-2. User drops/picks file(s).
-3. Frontend reads file, sends as `multipart/form-data` to `POST /api/accounts/:accountId/upload`.
-4. Backend responds with parsed count + duplicate warnings.
-5. Frontend shows result summary and refreshes upload history.
+1. User drops/picks a CSV or JSON file.
+2. Frontend sends it as `multipart/form-data` to `POST /api/uploads`.
+3. If no duplicates exist, backend inserts the rows immediately and returns `status: "completed"`.
+4. If duplicates exist, backend returns `status: "needs_review"` with parsed rows and duplicate flags.
+5. Frontend shows a duplicate-review panel with bulk accept/skip controls and per-row checkboxes for duplicate rows.
+6. User finalizes the selected rows with `POST /api/uploads/finalize`, and the frontend renders the completed summary.
 
 ### Bulk Tagging and Deletion Flow
 

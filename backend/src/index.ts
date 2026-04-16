@@ -7,7 +7,6 @@ import transactionRoutes from "./routes/transactions.js";
 import tagRoutes from "./routes/tags.js";
 import ruleRoutes from "./routes/rules.js";
 import analyticsRoutes from "./routes/analytics.js";
-import { uploadFile } from "./services/uploadService.js";
 import { seedDefaultUser } from "./db/seed.js";
 
 const app = new Hono();

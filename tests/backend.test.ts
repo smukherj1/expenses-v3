@@ -62,9 +62,31 @@ async function uploadCsv(
 async function uploadCsvOk(
   rows: CsvRow[],
   filename = "test.csv",
-): Promise<{ inserted: number; duplicatesSkipped: number }> {
+): Promise<unknown> {
   const res = await uploadCsv(rows, filename);
   return res.json();
+}
+
+async function finalizeUpload(
+  rows: Array<{
+    date: string;
+    description: string;
+    amount: string | number;
+    currency?: string;
+    account: string;
+    allowDuplicate?: boolean;
+  }>,
+) {
+  const res = await req("POST", "/uploads/finalize", {
+    transactions: rows.map((row) => ({
+      currency: "CAD",
+      ...row,
+    })),
+  });
+  return {
+    status: res.status,
+    data: (await res.json()) as unknown,
+  };
 }
 
 async function getAccountId(label: string): Promise<string> {
@@ -101,7 +123,7 @@ describe("Accounts", () => {
   });
 
   it("POST /api/uploads — automatically creates account", async () => {
-    const data = await uploadCsvOk([
+    const res = await uploadCsv([
       {
         date: "2025-03-01",
         description: "Grocery Store",
@@ -109,7 +131,13 @@ describe("Accounts", () => {
         account: accountLabel,
       },
     ]);
-    expect(data.inserted).toBe(1);
+    const data = (await res.json()) as {
+      status: string;
+      summary: { inserted: number; duplicates: number };
+    };
+    expect(res.status).toBe(201);
+    expect(data.status).toBe("completed");
+    expect(data.summary.inserted).toBe(1);
   });
 
   it("GET /api/accounts — lists auto-created accounts", async () => {
@@ -159,7 +187,7 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — inserts transactions and creates accounts automatically", async () => {
-    const data = await uploadCsvOk(
+    const res = await uploadCsv(
       [
         {
           date: "2025-03-01",
@@ -182,8 +210,14 @@ describe("Uploads", () => {
       ],
       "march.csv",
     );
-    expect(data.inserted).toBe(3);
-    expect(data.duplicatesSkipped).toBe(0);
+    const data = (await res.json()) as {
+      status: string;
+      summary: { inserted: number; duplicates: number };
+    };
+    expect(res.status).toBe(201);
+    expect(data.status).toBe("completed");
+    expect(data.summary.inserted).toBe(3);
+    expect(data.summary.duplicates).toBe(0);
 
     // Both accounts should now exist
     const { data: accounts } = await json<Array<{ label: string }>>(
@@ -196,7 +230,7 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — skips duplicate rows on second upload", async () => {
-    const data = await uploadCsvOk(
+    const res = await uploadCsv(
       [
         {
           date: "2025-03-01",
@@ -213,13 +247,71 @@ describe("Uploads", () => {
       ],
       "march2.csv",
     );
-    expect(data.inserted).toBe(1); // only the new one
-    expect(data.duplicatesSkipped).toBe(1);
+    const data = (await res.json()) as {
+      status: string;
+      summary: { inserted: number; duplicates: number };
+      transactions: Array<{ duplicate: boolean }>;
+    };
+    expect(res.status).toBe(200);
+    expect(data.status).toBe("needs_review");
+    expect(data.summary.inserted).toBe(0);
+    expect(data.summary.duplicates).toBe(1);
+    expect(data.transactions.map((row) => row.duplicate)).toEqual([
+      true,
+      false,
+    ]);
+  });
+
+  it("POST /api/uploads/finalize — inserts only the selected reviewed rows", async () => {
+    const res = await finalizeUpload([
+      {
+        date: "2025-03-15",
+        description: "Internet Bill",
+        amount: "-59.99",
+        account: chequingLabel,
+      },
+    ]);
+    const data = res.data as {
+      status: string;
+      inserted: number;
+      duplicates: number;
+    };
+    expect(res.status).toBe(201);
+    expect(data.status).toBe("completed");
+    expect(data.inserted).toBe(1);
+    expect(data.duplicates).toBe(0);
+  });
+
+  it("POST /api/uploads/finalize — allows duplicates when explicitly requested", async () => {
+    const res = await finalizeUpload([
+      {
+        date: "2025-03-01",
+        description: "Grocery Store",
+        amount: "-82.5",
+        account: chequingLabel,
+        allowDuplicate: true,
+      },
+      {
+        date: "2025-03-20",
+        description: "Ride Share",
+        amount: "-18.0",
+        account: chequingLabel,
+      },
+    ]);
+    const data = res.data as {
+      status: string;
+      inserted: number;
+      duplicates: number;
+    };
+    expect(res.status).toBe(201);
+    expect(data.status).toBe("completed");
+    expect(data.inserted).toBe(2);
+    expect(data.duplicates).toBe(1);
   });
 
   it("POST /api/uploads — merging: reuses existing accounts, creates only new ones", async () => {
     // chequingLabel and visaLabel already exist; savingsLabel does not
-    const data = await uploadCsvOk(
+    const res = await uploadCsv(
       [
         {
           date: "2025-04-01",
@@ -236,7 +328,12 @@ describe("Uploads", () => {
       ],
       "mixed.csv",
     );
-    expect(data.inserted).toBe(2);
+    const data = (await res.json()) as {
+      status: string;
+      summary: { inserted: number; duplicates: number };
+    };
+    expect(data.status).toBe("completed");
+    expect(data.summary.inserted).toBe(2);
 
     // Exactly 3 test accounts — no duplicate account created for chequingLabel
     const { data: accounts } = await json<Array<{ label: string }>>(
@@ -315,9 +412,13 @@ describe("Uploads", () => {
       "upload.json",
     );
     const res = await fetch(`${API}/uploads`, { method: "POST", body: form });
-    const data = (await res.json()) as { inserted: number };
+    const data = (await res.json()) as {
+      status: string;
+      summary: { inserted: number; duplicates: number };
+    };
     expect(res.status).toBe(201);
-    expect(data.inserted).toBe(1);
+    expect(data.status).toBe("completed");
+    expect(data.summary.inserted).toBe(1);
   });
 });
 

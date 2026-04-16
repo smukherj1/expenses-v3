@@ -1,28 +1,93 @@
 import { useRef, useState } from "react";
-import { uploadFile, type UploadResult } from "../api/uploads.ts";
+import {
+  finalizeUpload,
+  uploadFile,
+  type FinalizeUploadRow,
+  type UploadResult,
+  type UploadReviewResult,
+} from "../api/uploads.ts";
+
+type ReviewSelection = Record<number, boolean>;
+
+function initialSelection(result: UploadReviewResult): ReviewSelection {
+  return Object.fromEntries(
+    result.transactions.map((row) => [row.rowNumber, !row.duplicate]),
+  );
+}
 
 export default function UploadPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<UploadResult | null>(null);
+  const [selection, setSelection] = useState<ReviewSelection>({});
   const [error, setError] = useState<string | null>(null);
+
+  function resetFileInput() {
+    setSelectedFile(null);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  function clearSelection() {
+    setSelection({});
+  }
 
   async function handleUpload() {
     if (!selectedFile) return;
     setUploading(true);
     setResult(null);
     setError(null);
+    clearSelection();
+
     try {
       const res = await uploadFile(selectedFile);
       setResult(res);
-      setSelectedFile(null);
-      if (inputRef.current) inputRef.current.value = "";
+      if (res.status === "completed") {
+        resetFileInput();
+      } else {
+        setSelection(initialSelection(res));
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleFinalize() {
+    if (!result || result.status !== "needs_review") return;
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const transactions: FinalizeUploadRow[] = result.transactions
+        .filter((row) => selection[row.rowNumber])
+        .map((row) => ({
+          date: row.date,
+          description: row.description,
+          amount: row.amount,
+          currency: row.currency,
+          account: row.account,
+          allowDuplicate: row.duplicate ? true : undefined,
+        }));
+
+      const res = await finalizeUpload(transactions);
+      setResult({
+        status: "completed",
+        summary: {
+          inserted: res.inserted,
+          duplicates: res.duplicates,
+        },
+      });
+      clearSelection();
+      resetFileInput();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Finalize failed");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -31,6 +96,7 @@ export default function UploadPage() {
     setSelectedFile(file);
     setResult(null);
     setError(null);
+    clearSelection();
   }
 
   function onDrop(e: React.DragEvent) {
@@ -41,8 +107,21 @@ export default function UploadPage() {
       setSelectedFile(file);
       setResult(null);
       setError(null);
+      clearSelection();
     }
   }
+
+  function setAllDuplicateDecisions(acceptDuplicates: boolean) {
+    if (!result || result.status !== "needs_review") return;
+    const next: ReviewSelection = {};
+    for (const row of result.transactions) {
+      next[row.rowNumber] = !row.duplicate || acceptDuplicates;
+    }
+    setSelection(next);
+  }
+
+  const reviewResult =
+    result && result.status === "needs_review" ? result : null;
 
   return (
     <div>
@@ -50,7 +129,7 @@ export default function UploadPage() {
         Upload Transactions
       </h1>
 
-      <div className="max-w-2xl space-y-6">
+      <div className="max-w-3xl space-y-6">
         <div className="bg-white rounded-xl border p-5 text-sm text-gray-600">
           <p className="font-semibold text-gray-800 mb-2">Supported formats</p>
           <p className="mb-2">
@@ -107,7 +186,7 @@ export default function UploadPage() {
         {selectedFile && (
           <button
             onClick={handleUpload}
-            disabled={uploading}
+            disabled={uploading || submitting}
             className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
             data-testid="upload-submit"
           >
@@ -115,7 +194,94 @@ export default function UploadPage() {
           </button>
         )}
 
-        {result && (
+        {reviewResult && (
+          <div
+            className="bg-white border border-amber-200 rounded-xl p-4 text-sm"
+            data-testid="upload-review"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="font-semibold text-amber-900 mb-1">
+                  Duplicate review required
+                </p>
+                <p className="text-amber-800">
+                  {reviewResult.summary.duplicates} duplicate row
+                  {reviewResult.summary.duplicates === 1 ? "" : "s"} found.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAllDuplicateDecisions(false)}
+                  className="px-3 py-2 rounded-lg border border-amber-300 text-amber-800 hover:bg-amber-50"
+                  data-testid="skip-duplicates"
+                >
+                  Skip all duplicates
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAllDuplicateDecisions(true)}
+                  className="px-3 py-2 rounded-lg border border-amber-300 text-amber-800 hover:bg-amber-50"
+                  data-testid="accept-duplicates"
+                >
+                  Accept all duplicates
+                </button>
+                <button
+                  onClick={handleFinalize}
+                  disabled={submitting}
+                  className="px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                  data-testid="upload-finalize"
+                >
+                  {submitting ? "Finalizing…" : "Finalize upload"}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {reviewResult.transactions.map((row) => (
+                <label
+                  key={row.rowNumber}
+                  className={`flex items-start gap-3 rounded-lg border p-3 ${
+                    row.duplicate
+                      ? "border-amber-200 bg-amber-50"
+                      : "border-gray-200 bg-gray-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selection[row.rowNumber] ?? false}
+                    disabled={!row.duplicate}
+                    onChange={() =>
+                      setSelection((current) => ({
+                        ...current,
+                        [row.rowNumber]: !current[row.rowNumber],
+                      }))
+                    }
+                    className="mt-1 h-4 w-4 rounded border-gray-300"
+                    data-testid={`review-row-${row.rowNumber}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-gray-900">
+                        {row.date} - {row.description}
+                      </p>
+                      {row.duplicate && (
+                        <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-900">
+                          Duplicate
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-600">
+                      {row.amount} {row.currency} - {row.account}
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {result && result.status === "completed" && (
           <div
             className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm"
             data-testid="upload-result"
@@ -123,25 +289,12 @@ export default function UploadPage() {
             <p className="font-semibold text-green-800 mb-1">
               Upload successful
             </p>
-            <p className="text-green-700">Inserted: {result.inserted}</p>
             <p className="text-green-700">
-              Duplicates skipped: {result.duplicatesSkipped}
+              Inserted: {result.summary.inserted}
             </p>
-            {result.duplicateWarnings.length > 0 && (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-green-600">
-                  {result.duplicateWarnings.length} duplicate warnings
-                </summary>
-                <ul className="mt-1 space-y-0.5 text-green-600">
-                  {result.duplicateWarnings.map((w, i) => (
-                    <li key={i}>
-                      {w.date} — {w.description} — {w.amount} {w.currency} (
-                      {w.account})
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
+            <p className="text-green-700">
+              Duplicates: {result.summary.duplicates}
+            </p>
           </div>
         )}
 

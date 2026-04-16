@@ -65,12 +65,12 @@ function makeCsv(
   return [header, ...lines].join("\n");
 }
 
-async function uploadAndWaitForResult(
+async function uploadAndWaitForOutcome(
   page: Page,
   fileContent: string,
   filename: string,
   mimeType: string,
-): Promise<string> {
+): Promise<{ kind: "result" | "review" | "error"; text: string }> {
   // Set files directly on the (hidden) input — bypasses file-chooser dialog
   await page.locator('[data-testid="upload-file-input"]').setInputFiles({
     name: filename,
@@ -84,17 +84,32 @@ async function uploadAndWaitForResult(
   await page.locator('[data-testid="upload-submit"]').click();
   // Wait for result or error
   await page.waitForSelector(
-    '[data-testid="upload-result"], [data-testid="upload-error"]',
+    '[data-testid="upload-result"], [data-testid="upload-review"], [data-testid="upload-error"]',
     {
       timeout: 15000,
     },
   );
-  return (
-    (await page
-      .locator('[data-testid="upload-result"], [data-testid="upload-error"]')
-      .first()
-      .textContent()) ?? ""
-  );
+  if (await isVisible(page, '[data-testid="upload-review"]')) {
+    return {
+      kind: "review",
+      text:
+        (await page.locator('[data-testid="upload-review"]').textContent()) ??
+        "",
+    };
+  }
+  if (await isVisible(page, '[data-testid="upload-result"]')) {
+    return {
+      kind: "result",
+      text:
+        (await page.locator('[data-testid="upload-result"]').textContent()) ??
+        "",
+    };
+  }
+  return {
+    kind: "error",
+    text:
+      (await page.locator('[data-testid="upload-error"]').textContent()) ?? "",
+  };
 }
 
 async function isVisible(page: Page, selector: string): Promise<boolean> {
@@ -154,17 +169,18 @@ describe("Upload — CSV", () => {
         account: accountLabel,
       },
     ]);
-    const resultText = await uploadAndWaitForResult(
+    const outcome = await uploadAndWaitForOutcome(
       page,
       csv,
       "e2e-test.csv",
       "text/csv",
     );
-    expect(resultText).toContain("Inserted: 2");
-    expect(resultText).toContain("Duplicates skipped: 0");
+    expect(outcome.kind).toBe("result");
+    expect(outcome.text).toContain("Inserted: 2");
+    expect(outcome.text).toContain("Duplicates: 0");
   });
 
-  it("shows duplicate-skipped count on re-upload of same rows", async () => {
+  it("shows duplicate review and can skip duplicates", async () => {
     const csv = makeCsv([
       {
         date: "2025-06-01",
@@ -179,14 +195,56 @@ describe("Upload — CSV", () => {
         account: accountLabel,
       },
     ]);
-    const resultText = await uploadAndWaitForResult(
+    const outcome = await uploadAndWaitForOutcome(
       page,
       csv,
       "e2e-test2.csv",
       "text/csv",
     );
+    expect(outcome.kind).toBe("review");
+    expect(outcome.text).toContain("Duplicate review required");
+    await page.locator('[data-testid="skip-duplicates"]').click();
+    await page.locator('[data-testid="upload-finalize"]').click();
+    await page.waitForSelector('[data-testid="upload-result"]', {
+      timeout: 15000,
+    });
+    const resultText =
+      (await page.locator('[data-testid="upload-result"]').textContent()) ?? "";
     expect(resultText).toContain("Inserted: 1");
-    expect(resultText).toContain("Duplicates skipped: 1");
+    expect(resultText).toContain("Duplicates: 0");
+  });
+
+  it("can accept duplicate rows during review", async () => {
+    const csv = makeCsv([
+      {
+        date: "2025-06-01",
+        description: "Supermarket",
+        amount: -45.0,
+        account: accountLabel,
+      },
+      {
+        date: "2025-06-04",
+        description: "Book Store",
+        amount: -24.0,
+        account: accountLabel,
+      },
+    ]);
+    const outcome = await uploadAndWaitForOutcome(
+      page,
+      csv,
+      "e2e-test3.csv",
+      "text/csv",
+    );
+    expect(outcome.kind).toBe("review");
+    await page.locator('[data-testid="accept-duplicates"]').click();
+    await page.locator('[data-testid="upload-finalize"]').click();
+    await page.waitForSelector('[data-testid="upload-result"]', {
+      timeout: 15000,
+    });
+    const resultText =
+      (await page.locator('[data-testid="upload-result"]').textContent()) ?? "";
+    expect(resultText).toContain("Inserted: 2");
+    expect(resultText).toContain("Duplicates: 1");
   });
 });
 
@@ -224,13 +282,14 @@ describe("Upload — JSON", () => {
         account: accountLabel,
       },
     ]);
-    const resultText = await uploadAndWaitForResult(
+    const outcome = await uploadAndWaitForOutcome(
       page,
       json,
       "e2e-test.json",
       "application/json",
     );
-    expect(resultText).toContain("Inserted: 2");
+    expect(outcome.kind).toBe("result");
+    expect(outcome.text).toContain("Inserted: 2");
   });
 });
 

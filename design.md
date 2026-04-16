@@ -48,7 +48,7 @@ The frontend is a React SPA with client-side routing. See [frontend/design.md](f
 Key capabilities:
 
 - **Dashboard** — Summary cards (income, expenses, net) with monthly bar chart and category pie chart
-- **Upload** — Account selection, drag-and-drop file upload, parsed row preview with duplicate warnings, upload history
+- **Upload** — Drag-and-drop file upload with duplicate review and stateless finalize flow
 - **Transactions** — Full-text search, multi-field filters, sortable/paginated table, bulk tagging and bulk deletion via row selection
 - **Transaction detail** — View and edit tags for a single transaction
 - **Rules** — Create/edit/delete auto-tag rules with AND conditions, apply retroactively
