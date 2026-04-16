@@ -166,7 +166,7 @@ export async function updateTransaction(
   id: string,
   update: { description?: string; tags?: string[] },
 ) {
-  const txn = await getTransactionById(userId, id);
+  await getTransactionById(userId, id);
 
   if (update.description !== undefined) {
     await db

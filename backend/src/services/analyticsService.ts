@@ -1,6 +1,5 @@
-import { sql, and, eq, gt, lt, gte, lte, inArray } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { transactions, accounts, transactionTags, tags } from "../db/schema.js";
 
 export async function getMonthlySummary(userId: string, year: number) {
   const result = await db.execute(sql`

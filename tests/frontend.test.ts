@@ -395,10 +395,6 @@ describe("Tagging — detail page", () => {
     form.append("file", new Blob([csv], { type: "text/csv" }), "tag-seed.csv");
     await fetch(`${API}/uploads`, { method: "POST", body: form });
 
-    const res = await apiJson<{ data: Array<{ id: string }> }>(
-      "GET",
-      "/transactions",
-    );
     // Find by matching description via full list (search may be FTS-only)
     const allRes = await apiJson<{
       data: Array<{ id: string; description: string }>;

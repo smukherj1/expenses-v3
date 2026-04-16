@@ -6,7 +6,6 @@ import {
   transactions,
   accounts,
   transactionTags,
-  tags,
 } from "../db/schema.js";
 import { NotFoundError } from "../middleware/errorHandler.js";
 
