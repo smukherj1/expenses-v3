@@ -1,9 +1,10 @@
-import tsEslint from "typescript-eslint";
+import { defineConfig } from "eslint/config";
+import tseslint from "typescript-eslint";
 import unusedImports from "eslint-plugin-unused-imports";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 
-export default tsEslint.config(...tsEslint.configs.recommended, {
+export default defineConfig(tseslint.configs.recommended, {
   plugins: {
     "unused-imports": unusedImports,
     "react-hooks": reactHooks,
@@ -13,7 +14,7 @@ export default tsEslint.config(...tsEslint.configs.recommended, {
     "@typescript-eslint/no-unused-vars": "off",
     "unused-imports/no-unused-imports": "error",
     "unused-imports/no-unused-vars": [
-      "warn",
+      "error",
       {
         vars: "all",
         varsIgnorePattern: "^_",
