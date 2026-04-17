@@ -186,6 +186,25 @@ describe("Uploads", () => {
     }
   });
 
+  it("POST /api/uploads — accepts within upload without review", async () => {
+    const txn = {
+      date: "2015-10-29",
+      description: "Some Test Transaction 123456",
+      amount: "-123456.78",
+      account: visaLabel,
+    };
+    const res = await uploadCsv([{ ...txn }, { ...txn }], "airlines.csv");
+    const data = (await res.json()) as {
+      status: string;
+      summary: { inserted: number; duplicates: number };
+    };
+
+    expect(res.status).toBe(201);
+    expect(data.status).toBe("completed");
+    expect(data.summary.inserted).toBe(2);
+    expect(data.summary.duplicates).toBe(0);
+  });
+
   it("POST /api/uploads — inserts transactions and creates accounts automatically", async () => {
     const res = await uploadCsv(
       [

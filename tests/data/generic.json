@@ -26,5 +26,19 @@
     "amount": "-50.0",
     "currency": "CAD",
     "account": "TD Chequing"
+  },
+  {
+    "date": "2015-10-21",
+    "description": "Air Canada",
+    "amount": "-668.0",
+    "currency": "CAD",
+    "account": "BMO MasterCard"
+  },
+  {
+    "date": "2015-10-21",
+    "description": "Air Canada",
+    "amount": "-668.0",
+    "currency": "CAD",
+    "account": "BMO MasterCard"
   }
 ]
