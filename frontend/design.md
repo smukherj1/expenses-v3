@@ -17,6 +17,7 @@ React Router 7 configured in `src/router.tsx`:
 ```
 /                       -> <DashboardPage />
 /upload                 -> <UploadPage />
+/upload/duplicates      -> <DuplicateReviewPage />
 /transactions           -> <TransactionsPage />
 /transactions/:id       -> <TransactionDetailPage />
 /rules                  -> <RulesPage />
@@ -42,10 +43,14 @@ A `<RootLayout />` wraps all routes with the app shell (sidebar nav, header).
           │   └── <CategoryPieChart />      # Top categories this month
           │
           ├── <UploadPage />
-          │   ├── <AccountSelector />       # Pick or create account
           │   ├── <FileDropzone />          # Drag & drop / file picker
-          │   ├── <UploadPreview />         # Parsed rows preview + duplicate warnings
-          │   └── <UploadHistory />         # Past uploads with delete
+          │   ├── <UploadStatus />          # Immediate success or error summary
+          │   └── <UploadReviewStore />     # Saves needs_review payload before navigation
+          │
+          ├── <DuplicateReviewPage />
+          │   ├── <DuplicateReviewSummary /> # Upload summary + decision counts
+          │   ├── <DuplicateReviewTable />   # Paginated review table
+          │   └── <DuplicateReviewActions />  # Skip/accept all, finalize, cancel
           │
           ├── <TransactionsPage />
           │   ├── <SearchBar />             # Full-text search input
@@ -121,8 +126,9 @@ TanStack Query handles all server state:
 2. Frontend sends it as `multipart/form-data` to `POST /api/uploads`.
 3. If no duplicates exist, backend inserts the rows immediately and returns `status: "completed"`.
 4. If duplicates exist, backend returns `status: "needs_review"` with parsed rows and duplicate flags.
-5. Frontend shows a duplicate-review panel with bulk accept/skip controls and per-row checkboxes for duplicate rows.
-6. User finalizes the selected rows with `POST /api/uploads/finalize`, and the frontend renders the completed summary.
+5. Frontend saves the review payload, navigates to `/upload/duplicates`, and renders a paginated review table.
+6. User changes duplicate decisions and finalizes from the review page.
+7. Frontend sends the included rows to `POST /api/uploads/finalize`, then renders the completion summary.
 
 ### Bulk Tagging and Deletion Flow
 

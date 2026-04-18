@@ -26,11 +26,7 @@ A web application that lets users upload financial transactions from bank accoun
 - Users upload one or more files at a time; each upload is tied to a user-chosen **account label** (e.g. "TD Chequing", "CIBC Visa").
 - The system parses each file and extracts: **date, description, amount**.
 - **Currency:** Only CAD (Canadian Dollar) is accepted for now. Uploads containing other currencies are rejected. The schema supports multi-currency for future expansion.
-- Duplicate detection: warn when a transaction with the same date + amount + description already exists for that account and allow the user to either upload the duplicates
-  anyway or skip them. The user should be able to either:
-  - Just skip _all_ duplicates in one shot.
-  - Accept _all_ duplicates in one shot.
-  - View the duplicates and accept or skip them one by one or by selecting multiple entries.
+- Duplicate detection: warn when a transaction with the same date + amount + description already exists for that account. Uploads requiring duplicate review navigate to a dedicated review page where the user can skip all duplicates, accept all duplicates, or accept/skip duplicate rows individually or in bulk. Non-duplicate rows are included by default.
 - Upload history: users can view past uploads and delete an entire upload batch if it was incorrect.
 
 ### 2. Transaction Search & Filtering
@@ -78,6 +74,7 @@ All charts are filterable by date range, account, and tags.
 ```
 /                       -> Dashboard (summary cards + key charts)
 /upload                 -> Upload transactions
+/upload/duplicates      -> Review duplicate rows from the most recent upload
 /transactions           -> Search & browse transactions
 /transactions/:id       -> Single transaction detail (edit tags, notes)
 /rules                  -> Auto-tag rule management

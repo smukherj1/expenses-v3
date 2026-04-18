@@ -7,7 +7,14 @@
  *   or: bun run test:frontend
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  beforeEach,
+  afterAll,
+} from "bun:test";
 import { chromium, type Browser, type Page } from "playwright";
 
 const FRONTEND = process.env.FRONTEND_URL ?? "http://localhost:8080";
@@ -84,17 +91,18 @@ async function uploadAndWaitForOutcome(
   await page.locator('[data-testid="upload-submit"]').click();
   // Wait for result or error
   await page.waitForSelector(
-    '[data-testid="upload-result"], [data-testid="upload-review"], [data-testid="upload-error"]',
+    '[data-testid="duplicate-review-page"], [data-testid="upload-result"], [data-testid="upload-error"]',
     {
       timeout: 15000,
     },
   );
-  if (await isVisible(page, '[data-testid="upload-review"]')) {
+  if (await isVisible(page, '[data-testid="duplicate-review-page"]')) {
     return {
       kind: "review",
       text:
-        (await page.locator('[data-testid="upload-review"]').textContent()) ??
-        "",
+        (await page
+          .locator('[data-testid="duplicate-review-page"]')
+          .textContent()) ?? "",
     };
   }
   if (await isVisible(page, '[data-testid="upload-result"]')) {
@@ -140,6 +148,9 @@ describe("Upload — CSV", () => {
 
   beforeAll(async () => {
     page = await browser.newPage();
+  });
+
+  beforeEach(async () => {
     await page.goto(`${FRONTEND}/upload`);
     await page.waitForLoadState("networkidle");
   });
@@ -202,14 +213,17 @@ describe("Upload — CSV", () => {
       "text/csv",
     );
     expect(outcome.kind).toBe("review");
-    expect(outcome.text).toContain("Duplicate review required");
-    await page.locator('[data-testid="skip-duplicates"]').click();
-    await page.locator('[data-testid="upload-finalize"]').click();
-    await page.waitForSelector('[data-testid="upload-result"]', {
+    expect(outcome.text).toContain("Duplicate Review");
+    expect(page.url()).toContain("/upload/duplicates");
+    await page.locator('[data-testid="duplicate-review-skip-all"]').click();
+    await page.locator('[data-testid="duplicate-review-finalize"]').click();
+    await page.waitForSelector('[data-testid="duplicate-review-summary"]', {
       timeout: 15000,
     });
     const resultText =
-      (await page.locator('[data-testid="upload-result"]').textContent()) ?? "";
+      (await page
+        .locator('[data-testid="duplicate-review-summary"]')
+        .textContent()) ?? "";
     expect(resultText).toContain("Inserted: 1");
     expect(resultText).toContain("Duplicates: 0");
   });
@@ -236,14 +250,59 @@ describe("Upload — CSV", () => {
       "text/csv",
     );
     expect(outcome.kind).toBe("review");
-    await page.locator('[data-testid="accept-duplicates"]').click();
-    await page.locator('[data-testid="upload-finalize"]').click();
-    await page.waitForSelector('[data-testid="upload-result"]', {
+    await page.locator('[data-testid="duplicate-review-accept-all"]').click();
+    await page.locator('[data-testid="duplicate-review-finalize"]').click();
+    await page.waitForSelector('[data-testid="duplicate-review-summary"]', {
       timeout: 15000,
     });
     const resultText =
-      (await page.locator('[data-testid="upload-result"]').textContent()) ?? "";
+      (await page
+        .locator('[data-testid="duplicate-review-summary"]')
+        .textContent()) ?? "";
     expect(resultText).toContain("Inserted: 2");
+    expect(resultText).toContain("Duplicates: 1");
+  });
+
+  it("paginates duplicate review rows on the client", async () => {
+    const rows = Array.from({ length: 24 }, (_, index) => ({
+      date: `2025-08-${String(index + 1).padStart(2, "0")}`,
+      description:
+        index === 20 ? "Supermarket" : `Review Row ${String(index + 1)}`,
+      amount: index === 20 ? -45.0 : -(index + 1),
+      account: accountLabel,
+    })).map((row, index) =>
+      index === 20 ? { ...row, date: "2025-06-01" } : row,
+    );
+    const csv = makeCsv(rows);
+
+    const outcome = await uploadAndWaitForOutcome(
+      page,
+      csv,
+      "e2e-review-pages.csv",
+      "text/csv",
+    );
+
+    expect(outcome.kind).toBe("review");
+    expect(
+      await page.locator('[data-testid="duplicate-review-row"]').count(),
+    ).toBe(20);
+    await page.locator('[data-testid="pagination"] button').nth(1).click();
+    await page.waitForSelector('[data-testid="duplicate-review-row-21"]', {
+      timeout: 8000,
+    });
+    expect(
+      await page.locator('[data-testid="duplicate-review-row"]').count(),
+    ).toBe(4);
+    await page.locator('[data-testid="duplicate-review-row-21"]').check();
+    await page.locator('[data-testid="duplicate-review-finalize"]').click();
+    await page.waitForSelector('[data-testid="duplicate-review-summary"]', {
+      timeout: 15000,
+    });
+    const resultText =
+      (await page
+        .locator('[data-testid="duplicate-review-summary"]')
+        .textContent()) ?? "";
+    expect(resultText).toContain("Inserted: 24");
     expect(resultText).toContain("Duplicates: 1");
   });
 });

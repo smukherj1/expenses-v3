@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router";
 import RootLayout from "./components/RootLayout.tsx";
 import DashboardPage from "./pages/DashboardPage.tsx";
 import UploadPage from "./pages/UploadPage.tsx";
+import DuplicateReviewPage from "./pages/DuplicateReviewPage.tsx";
 import TransactionsPage from "./pages/TransactionsPage.tsx";
 import TransactionDetailPage from "./pages/TransactionDetailPage.tsx";
 import RulesPage from "./pages/RulesPage.tsx";
@@ -15,6 +16,7 @@ export default function App() {
         <Route element={<RootLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="upload" element={<UploadPage />} />
+          <Route path="upload/duplicates" element={<DuplicateReviewPage />} />
           <Route path="transactions" element={<TransactionsPage />} />
           <Route path="transactions/:id" element={<TransactionDetailPage />} />
           <Route path="rules" element={<RulesPage />} />

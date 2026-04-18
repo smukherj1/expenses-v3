@@ -175,6 +175,12 @@ Catches errors and returns structured JSON:
 5. Create any missing accounts, insert the selected rows, and apply auto-tag rules to inserted transactions only.
 6. Return `{ status: "completed", inserted: N, duplicates: N }`.
 
+### Duplicate Review Contract
+
+- The backend remains stateless during review; there is no persisted upload draft or review session.
+- `POST /api/uploads` may return a large `needs_review` payload, and the frontend paginates it client-side on `/upload/duplicates`.
+- The frontend is responsible for remembering the user'"'"'s review decisions until finalize is submitted.
+
 ### `GET /api/transactions`
 
 Query params validated by Zod schema `src/schemas/transaction.ts`.
