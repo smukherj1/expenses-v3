@@ -21,10 +21,10 @@ Base path: `/api`
 
 ### Uploads
 
-| Method | Path                    | Description                                                                             |
-| ------ | ----------------------- | --------------------------------------------------------------------------------------- |
-| POST   | `/api/uploads`          | Classify upload file (multipart/form-data), create immediately when no duplicates exist |
-| POST   | `/api/uploads/finalize` | Finalize reviewed rows from JSON payload, optionally allowing duplicates per row        |
+| Method | Path                    | Description                                                                                             |
+| ------ | ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/uploads`          | Classify selected-format upload file (multipart/form-data), create immediately when no duplicates exist |
+| POST   | `/api/uploads/finalize` | Finalize reviewed rows from JSON payload, optionally allowing duplicates per row                        |
 
 ### Transactions
 
@@ -111,8 +111,15 @@ backend/src/
 │   ├── ruleService.ts        # Rule matching engine
 │   └── analyticsService.ts   # Aggregation queries
 ├── parsers/
-│   ├── csv.ts                # Papa Parse wrapper, column mapping
-│   └── json.ts               # JSON array parsing, validation
+│   ├── csv.ts                # Generic CSV parser, column mapping
+│   ├── json.ts               # Generic JSON array parsing, validation
+│   └── institutions/
+│       ├── types.ts          # Upload format enum and parser contract
+│       ├── index.ts          # Parser registry
+│       ├── tdCanada.ts       # TD Canada CSV parser
+│       ├── rbcCanada.ts      # RBC Canada CSV parser
+│       ├── amexCanada.ts     # American Express Canada CSV parser
+│       └── cibcCanada.ts     # CIBC CSV parser
 └── schemas/
     ├── account.ts            # Zod schemas for account endpoints
     ├── upload.ts
@@ -153,9 +160,12 @@ Catches errors and returns structured JSON:
 
 ### `POST /api/uploads`
 
-1. Accept `multipart/form-data` with a single file field.
-2. Detect format from file extension (`.csv` or `.json`).
-3. Parse file using the appropriate parser.
+1. Accept `multipart/form-data` with a single file field plus upload metadata:
+   - `file`: uploaded CSV or JSON file.
+   - `format`: one of `generic_csv`, `generic_json`, `td_canada`, `rbc_canada`, `amex_canada`, `cibc_canada`.
+   - `accountLabel`: required for institution CSV formats, ignored for generic CSV/JSON unless a later implementation chooses to support it as a fallback.
+2. Validate that the selected format matches the uploaded file extension and expected file shape.
+3. Parse file using the selected parser. The backend does not auto-detect institution formats in this iteration.
 4. Validate every row:
    - `date`: must be a valid date.
    - `description`: non-empty string.
@@ -165,6 +175,33 @@ Catches errors and returns structured JSON:
 6. If duplicates exist, return `status: "needs_review"` with parsed rows and duplicate flags.
 7. If no duplicates exist, bulk-insert `accounts` rows for new accounts, insert `transactions`, apply auto-tag rules, and return `status: "completed"`.
 8. No upload-review records or pending draft state are stored server-side.
+
+Completed response:
+
+```json
+{
+  "status": "completed",
+  "format": "td_canada",
+  "summary": {
+    "inserted": 6,
+    "duplicates": 0
+  }
+}
+```
+
+Review response:
+
+```json
+{
+  "status": "needs_review",
+  "format": "rbc_canada",
+  "summary": {
+    "inserted": 0,
+    "duplicates": 2
+  },
+  "transactions": []
+}
+```
 
 ### `POST /api/uploads/finalize`
 
@@ -219,7 +256,25 @@ to a user's transactions. To achieve OR, users create multiple rules for the sam
 
 ## File Parsers
 
-### CSV Parser (`parsers/csv.ts`)
+All parsers normalize source files into:
+
+```typescript
+interface ParsedTransaction {
+  date: string; // yyyy-mm-dd
+  description: string;
+  amount: string; // canonical sign convention
+  currency: "CAD";
+  account: string;
+}
+```
+
+Canonical amount convention:
+
+- Expenses and charges are negative.
+- Income, credits, refunds, and credit-card payments are positive.
+- Source files are not filtered for payments, credits, refunds, or transfers. They are imported as source-of-truth ledger rows and can be excluded later in analytics.
+
+### Generic CSV Parser (`parsers/csv.ts`)
 
 Uses Papa Parse with:
 
@@ -228,14 +283,35 @@ Uses Papa Parse with:
 - Column mapping: the parser attempts to match common column names:
   - Date: `date`, `Date`, `Transaction Date`, `Posted Date` — must be `yyyy-mm-dd`
   - Description: `description`, `Description`, `Memo`, `Name`
-  - Amount: `amount`, `Amount`, `Debit`, `Credit` (if separate debit/credit columns, compute net)
+  - Amount: `amount`, `Amount`, `Debit`, `Credit` (if separate debit/credit columns, compute net as credit minus debit)
   - Currency: `currency`, `Currency` (optional, defaults to `'CAD'`)
+  - Account: `account`, `Account`, `Account Name` — required for generic CSV
 
 Returns: `ParsedTransaction[]` or throws with row-level errors.
 
 ### JSON Parser (`parsers/json.ts`)
 
-Expects a JSON array of objects with the same field mapping as CSV. Dates must be `yyyy-mm-dd`. Validates each object with Zod.
+Expects a JSON array of objects with the same canonical fields as generic CSV. Dates must be `yyyy-mm-dd`. Each row must include `account`. Validates each object with Zod.
+
+### Institution Parser Registry
+
+Institution parsers are selected by the explicit `format` field, not by automatic detection. They share helper functions for:
+
+- Strict date normalization to `yyyy-mm-dd`.
+- Monetary value normalization for currency symbols, commas, whitespace, and negative signs.
+- Required account-label validation for institution formats.
+- Row-numbered validation errors.
+
+Supported institution formats:
+
+| Format        | Source Shape                                                                                    | Date Rule                | Amount Rule                                                                       | Account Rule                                      |
+| ------------- | ----------------------------------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `td_canada`   | Headerless columns: date, description, debit, credit, balance                                   | Already `yyyy-mm-dd`     | `credit - debit`                                                                  | Use `accountLabel`                                |
+| `rbc_canada`  | Headered columns including `Transaction Date`, `Description 1`, `Description 2`, `CAD$`, `USD$` | Normalize `M/D/YYYY`     | Use signed `CAD$` value                                                           | Use `accountLabel`; do not persist account number |
+| `amex_canada` | Headered columns including `Date`, `Description`, `Amount`                                      | Normalize `DD Mon. YYYY` | Invert source sign so charges become negative and payment credits become positive | Use `accountLabel`                                |
+| `cibc_canada` | Headerless columns: date, description, debit, credit, card number                               | Already `yyyy-mm-dd`     | `credit - debit`                                                                  | Use `accountLabel`; do not persist card number    |
+
+Institution uploads reject non-CAD columns or values. RBC rows with populated `USD$` are rejected while CAD-only rows are accepted.
 
 ## Auto-Tag Rule Engine (`services/ruleService.ts`)
 

@@ -2,17 +2,17 @@
 
 ## Tech Stack
 
-| Layer                | Choice                                        | Rationale                                                                         |
-| -------------------- | --------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Frontend**         | React 19 + TypeScript, Vite 8, React Router 7 | Fast dev server, file-based or config-based routing, modern React features.       |
-| **Charts**           | Recharts                                      | Composable, declarative charting built on React + D3.                             |
-| **Backend**          | Hono + TypeScript                             | Lightweight, fast, runs on Node.js. Built-in middleware ecosystem.                |
-| **Validation**       | Zod + `@hono/zod-validator`                   | Shared schema definitions for request/response validation and OpenAPI generation. |
-| **Database**         | PostgreSQL 16                                 | Full-text search, date/range queries, aggregate functions.                        |
-| **ORM**              | Drizzle ORM                                   | Type-safe queries, lightweight, SQL-first philosophy.                             |
-| **File parsing**     | Papa Parse (CSV), native `JSON.parse`         | Papa Parse handles edge cases (quoted fields, BOM, etc).                          |
-| **Runtime**          | Bun                                           | Super fast NodeJS runtime.                                                        |
-| **Containerization** | Docker Compose                                | PostgreSQL + backend + frontend in one `docker compose up`.                       |
+| Layer                | Choice                                        | Rationale                                                                                  |
+| -------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Frontend**         | React 19 + TypeScript, Vite 8, React Router 7 | Fast dev server, file-based or config-based routing, modern React features.                |
+| **Charts**           | Recharts                                      | Composable, declarative charting built on React + D3.                                      |
+| **Backend**          | Hono + TypeScript                             | Lightweight, fast, runs on Node.js. Built-in middleware ecosystem.                         |
+| **Validation**       | Zod + `@hono/zod-validator`                   | Shared schema definitions for request/response validation and OpenAPI generation.          |
+| **Database**         | PostgreSQL 16                                 | Full-text search, date/range queries, aggregate functions.                                 |
+| **ORM**              | Drizzle ORM                                   | Type-safe queries, lightweight, SQL-first philosophy.                                      |
+| **File parsing**     | Papa Parse (CSV), native `JSON.parse`         | Papa Parse handles quoted fields and powers generic plus institution-specific CSV parsers. |
+| **Runtime**          | Bun                                           | Super fast NodeJS runtime.                                                                 |
+| **Containerization** | Docker Compose                                | PostgreSQL + backend + frontend in one `docker compose up`.                                |
 
 ## High-Level Architecture
 
@@ -48,7 +48,7 @@ The frontend is a React SPA with client-side routing. See [frontend/design.md](f
 Key capabilities:
 
 - **Dashboard** — Summary cards (income, expenses, net) with monthly bar chart and category pie chart
-- **Upload** — Drag-and-drop file upload with a dedicated duplicate review route, client-side review pagination, and stateless finalize flow
+- **Upload** — Drag-and-drop file upload with explicit format selection, account-label selection for institution imports, a dedicated duplicate review route, client-side review pagination, and stateless finalize flow
 - **Transactions** — Full-text search, multi-field filters, sortable/paginated table, bulk tagging and bulk deletion via row selection
 - **Transaction detail** — View and edit tags for a single transaction
 - **Rules** — Create/edit/delete auto-tag rules with AND conditions, apply retroactively
@@ -62,7 +62,7 @@ The backend is a Hono REST API serving JSON over `/api`. See [backend/design.md]
 Key capabilities:
 
 - **Accounts** — CRUD for user-defined account labels (e.g. "TD Chequing")
-- **Uploads** — Multipart file upload (CSV/JSON), parsing, duplicate detection, auto-tag on ingest
+- **Uploads** — Multipart file upload for generic CSV/JSON and supported Canadian institution CSV exports, parsing, duplicate detection, auto-tag on ingest
 - **Transactions** — Full-text search, multi-field filtering, pagination, sorting, bulk tagging, bulk deletion
 - **Tags** — User-scoped string tags, applied to transactions individually or in bulk
 - **Auto-tag rules** — Condition-based rules (AND logic) that auto-apply tags; can run retroactively
@@ -90,6 +90,38 @@ Hono `onError` handler catches thrown errors and maps them to appropriate HTTP s
 ### Default User Middleware
 
 A Hono middleware injects `userId` into the request context using the hardcoded default user ID. When auth is added, this middleware is replaced with a real auth middleware — no route handler changes needed.
+
+### Upload Format Normalization
+
+The upload pipeline normalizes all supported source files into the canonical transaction shape before duplicate detection or insertion:
+
+```json
+{
+  "date": "2026-04-14",
+  "description": "Merchant description",
+  "amount": "-42.18",
+  "currency": "CAD",
+  "account": "User-selected account label"
+}
+```
+
+Supported upload formats are selected explicitly by the user:
+
+- `generic_csv`
+- `generic_json`
+- `td_canada`
+- `rbc_canada`
+- `amex_canada`
+- `cibc_canada`
+
+Institution CSV uploads use a user-selected or user-entered account label. Generic CSV and JSON uploads keep using the row-level `account` field.
+
+The canonical amount convention is:
+
+- Expenses and charges are negative.
+- Income, credits, refunds, and credit-card payments are positive.
+- American Express Canada charges are inverted during parsing because the source export presents charges as positive values.
+- Payments, credits, refunds, and transfers are imported rather than filtered out at upload time.
 
 ### Currency Validation
 

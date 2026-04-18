@@ -22,10 +22,14 @@ A web application that lets users upload financial transactions from bank accoun
 
 ### 1. Transaction Upload
 
-- **Supported formats:** CSV, JSON (extensible to OFX/QFX later).
-- Users upload one or more files at a time; each upload is tied to a user-chosen **account label** (e.g. "TD Chequing", "CIBC Visa").
-- The system parses each file and extracts: **date, description, amount**.
-- **Currency:** Only CAD (Canadian Dollar) is accepted for now. Uploads containing other currencies are rejected. The schema supports multi-currency for future expansion.
+- **Supported formats:** Generic CSV, generic JSON, TD Canada CSV, RBC Canada CSV, American Express Canada CSV, and CIBC CSV (extensible to OFX/QFX later).
+- Users upload one file at a time and explicitly choose the source format before submitting. The app does not auto-detect institution formats for this iteration.
+- Institution CSV uploads require a user-chosen **account label** (e.g. "TD Chequing", "CIBC Visa"). The upload page lets users select an existing account label from a dropdown to avoid typos, and also lets users type a new label when needed.
+- Generic CSV and JSON uploads use the `account` field provided by each row. They do not require a separate account label because the account is part of the generic data schema.
+- The system parses each file and extracts: **date, description, amount, currency, account**.
+- **Currency:** Only CAD (Canadian Dollar) is accepted for now. Uploads containing other currencies are rejected. Institution CSV formats are treated as CAD-only. The schema supports multi-currency for future expansion.
+- **Amount convention:** Expenses are stored as negative amounts and income, credits, refunds, and payments are stored as positive amounts. Institution parsers normalize source-specific signs into this model. American Express Canada charges are inverted because the export presents charges as positive values.
+- Credit-card payments, bank credits, refunds, and transfers are imported rather than dropped so the database remains a source-of-truth ledger. Analytics can later exclude or filter these rows.
 - Duplicate detection: warn when a transaction with the same date + amount + description already exists for that account. Uploads requiring duplicate review navigate to a dedicated review page where the user can skip all duplicates, accept all duplicates, or accept/skip duplicate rows individually or in bulk. Non-duplicate rows are included by default.
 - Upload history: users can view past uploads and delete an entire upload batch if it was incorrect.
 

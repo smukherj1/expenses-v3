@@ -43,6 +43,8 @@ A `<RootLayout />` wraps all routes with the app shell (sidebar nav, header).
           │   └── <CategoryPieChart />      # Top categories this month
           │
           ├── <UploadPage />
+          │   ├── <UploadFormatSelect />    # Explicit generic/institution format selection
+          │   ├── <AccountLabelCombobox />  # Existing-account dropdown plus free-form entry for institution imports
           │   ├── <FileDropzone />          # Drag & drop / file picker
           │   ├── <UploadStatus />          # Immediate success or error summary
           │   └── <UploadReviewStore />     # Saves needs_review payload before navigation
@@ -82,16 +84,18 @@ A `<RootLayout />` wraps all routes with the app shell (sidebar nav, header).
 
 ## Shared Components
 
-| Component           | Purpose                                                                       |
-| ------------------- | ----------------------------------------------------------------------------- |
-| `<Sidebar />`       | App navigation, highlights active route                                       |
-| `<Header />`        | Page title derived from route, optional breadcrumbs                           |
-| `<Pagination />`    | Page controls, used by TransactionTable and TopNTable                         |
-| `<TagBadge />`      | Displays a tag name with optional remove button                               |
-| `<TagInput />`      | Autocomplete input for adding tags (queries GET `/api/tags`)                  |
-| `<EmptyState />`    | Placeholder when no data exists                                               |
-| `<ConfirmDialog />` | Confirmation modal for destructive actions (delete upload, bulk delete, etc.) |
-| `<FileDropzone />`  | Drag-and-drop file upload area with format validation                         |
+| Component                  | Purpose                                                                                                                |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `<Sidebar />`              | App navigation, highlights active route                                                                                |
+| `<Header />`               | Page title derived from route, optional breadcrumbs                                                                    |
+| `<Pagination />`           | Page controls, used by TransactionTable and TopNTable                                                                  |
+| `<TagBadge />`             | Displays a tag name with optional remove button                                                                        |
+| `<TagInput />`             | Autocomplete input for adding tags (queries GET `/api/tags`)                                                           |
+| `<EmptyState />`           | Placeholder when no data exists                                                                                        |
+| `<ConfirmDialog />`        | Confirmation modal for destructive actions (delete upload, bulk delete, etc.)                                          |
+| `<FileDropzone />`         | Drag-and-drop file upload area with format validation                                                                  |
+| `<UploadFormatSelect />`   | Selects one explicit upload format: generic CSV, generic JSON, TD Canada, RBC Canada, American Express Canada, or CIBC |
+| `<AccountLabelCombobox />` | Lets users choose an existing account label from `GET /api/accounts` or type a new label                               |
 
 ## API Client Layer
 
@@ -122,13 +126,36 @@ TanStack Query handles all server state:
 
 ### Upload Flow
 
-1. User drops/picks a CSV or JSON file.
-2. Frontend sends it as `multipart/form-data` to `POST /api/uploads`.
-3. If no duplicates exist, backend inserts the rows immediately and returns `status: "completed"`.
-4. If duplicates exist, backend returns `status: "needs_review"` with parsed rows and duplicate flags.
-5. Frontend saves the review payload, navigates to `/upload/duplicates`, and renders a paginated review table.
-6. User changes duplicate decisions and finalizes from the review page.
-7. Frontend sends the included rows to `POST /api/uploads/finalize`, then renders the completion summary.
+1. User selects one explicit format:
+   - Generic CSV
+   - Generic JSON
+   - TD Canada CSV
+   - RBC Canada CSV
+   - American Express Canada CSV
+   - CIBC CSV
+2. For institution CSV formats, the user chooses an account label from an existing-account dropdown or types a new account label. Generic CSV and JSON do not require this field because each row must include `account`.
+3. User drops/picks a CSV or JSON file. The file picker accepts `.csv` for CSV formats and `.json` for generic JSON.
+4. Frontend sends `multipart/form-data` to `POST /api/uploads`:
+
+```txt
+file: File
+format: generic_csv | generic_json | td_canada | rbc_canada | amex_canada | cibc_canada
+accountLabel: string, only required for institution CSV formats
+```
+
+5. If no duplicates exist, backend inserts the rows immediately and returns `status: "completed"` plus the selected `format`.
+6. If duplicates exist, backend returns `status: "needs_review"` with parsed rows, duplicate flags, and the selected `format`.
+7. Frontend saves the review payload, navigates to `/upload/duplicates`, and renders a paginated review table.
+8. User changes duplicate decisions and finalizes from the review page.
+9. Frontend sends the included normalized rows to `POST /api/uploads/finalize`, then renders the completion summary.
+
+Institution-format UX rules:
+
+- The submit button is disabled until a format, file, and required account label are present.
+- The account-label input should prefer selecting existing labels to avoid accidental near-duplicate accounts.
+- Free-form account labels remain supported so users can create a new account at upload time.
+- The upload page should explain that expenses are stored as negative amounts and that American Express Canada charges are inverted during import.
+- Payments, credits, refunds, and transfers are imported rather than removed; filtering belongs in transactions and analytics.
 
 ### Bulk Tagging and Deletion Flow
 
