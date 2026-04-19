@@ -1,11 +1,10 @@
 /**
  * E2E tests for the Financial Tracker backend API.
  * Requires the backend to be running at BACKEND_URL (default: http://localhost:3000).
- * Each describe block is self-contained: beforeAll creates required data,
- * afterAll tears it down.
+ * Each test seeds and cleans up its own data.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { readFileSync } from "node:fs";
 
 const BASE_URL = process.env.BACKEND_URL ?? "http://localhost:3000";
@@ -34,7 +33,7 @@ async function json<T = unknown>(
 type CsvRow = {
   date: string;
   description: string;
-  amount: string;
+  amount: string | number;
   account: string;
 };
 
@@ -54,7 +53,7 @@ function readFixture(name: string): string {
 function makeCsv(rows: CsvRow[]) {
   const header = "date,description,amount,currency,account";
   const lines = rows.map(
-    (r) => `${r.date},${r.description},${r.amount},CAD,${r.account}`,
+    (r) => `${r.date},${r.description},${String(r.amount)},CAD,${r.account}`,
   );
   return [header, ...lines].join("\n");
 }
@@ -77,14 +76,46 @@ async function uploadCsv(
   return fetch(`${API}/uploads`, { method: "POST", body: form });
 }
 
-async function uploadCsvOk(
-  rows: CsvRow[],
-  filename = "test.csv",
-  options: { format?: UploadFormat; accountLabel?: string } = {},
-): Promise<unknown> {
-  const res = await uploadCsv(rows, filename, options);
-  return res.json();
+let cleanupAccountLabels: string[] = [];
+let cleanupTagNames: string[] = [];
+let cleanupRuleIds: string[] = [];
+
+function uniqueLabel(base: string): string {
+  return `${base} ${crypto.randomUUID().slice(0, 8)}`;
 }
+
+function trackAccount(label: string): string {
+  cleanupAccountLabels.push(label);
+  return label;
+}
+
+function trackTag(name: string): string {
+  cleanupTagNames.push(name);
+  return name;
+}
+
+function trackRule(id: string): string {
+  cleanupRuleIds.push(id);
+  return id;
+}
+
+beforeEach(() => {
+  cleanupAccountLabels = [];
+  cleanupTagNames = [];
+  cleanupRuleIds = [];
+});
+
+afterEach(async () => {
+  for (const id of [...cleanupRuleIds].reverse()) {
+    await req("DELETE", `/rules/${id}`);
+  }
+  for (const label of [...cleanupAccountLabels].reverse()) {
+    await deleteAccountByLabel(label);
+  }
+  for (const name of [...cleanupTagNames].reverse()) {
+    await deleteTagByName(name);
+  }
+});
 
 async function uploadRaw(
   content: string,
@@ -149,21 +180,55 @@ async function deleteAccountByLabel(label: string) {
   if (acct) await req("DELETE", `/accounts/${acct.id}`);
 }
 
+async function deleteTagByName(name: string) {
+  const { data } = await json<Array<{ id: string; name: string }>>(
+    "GET",
+    "/tags",
+  );
+  const tag = data.find((t) => t.name === name);
+  if (tag) await req("DELETE", `/tags/${tag.id}`);
+}
+
+async function seedCsvRows(
+  rows: Array<{
+    date: string;
+    description: string;
+    amount: string | number;
+    account: string;
+  }>,
+  filename = `seed-${crypto.randomUUID()}.csv`,
+) {
+  const res = await uploadCsv(rows, filename);
+  if (!res.ok) {
+    throw new Error(`Seed upload failed: ${res.status} ${await res.text()}`);
+  }
+  return res;
+}
+
+async function getTransactionsForAccount(accountId: string) {
+  const { data } = await json<{
+    data: Array<{
+      id: string;
+      description: string;
+      amount: number;
+      date: string;
+      accountId: string;
+    }>;
+  }>("GET", `/transactions?accountId=${accountId}&limit=100`);
+  return data.data;
+}
+
 // ── accounts ─────────────────────────────────────────────────────────────────
 
 describe("Accounts", () => {
-  const accountLabel = "Accounts Test — Chequing";
-
-  afterAll(async () => {
-    await deleteAccountByLabel(accountLabel);
-  });
-
   it("POST /api/accounts — not supported (returns 404)", async () => {
+    const accountLabel = uniqueLabel("Accounts Test Chequing");
     const { status } = await json("POST", "/accounts", { label: accountLabel });
     expect(status).toBe(404);
   });
 
   it("POST /api/uploads — automatically creates account", async () => {
+    const accountLabel = trackAccount(uniqueLabel("Accounts Upload Chequing"));
     const res = await uploadCsv([
       {
         date: "2025-03-01",
@@ -184,6 +249,15 @@ describe("Accounts", () => {
   });
 
   it("GET /api/accounts — lists auto-created accounts", async () => {
+    const accountLabel = trackAccount(uniqueLabel("Accounts List Chequing"));
+    await seedCsvRows([
+      {
+        date: "2025-03-01",
+        description: "Seed",
+        amount: "-1",
+        account: accountLabel,
+      },
+    ]);
     const { status, data } = await json<Array<{ id: string; label: string }>>(
       "GET",
       "/accounts",
@@ -195,6 +269,15 @@ describe("Accounts", () => {
   });
 
   it("DELETE /api/accounts/:id — deletes account and cascades transactions", async () => {
+    const accountLabel = trackAccount(uniqueLabel("Accounts Delete Chequing"));
+    await seedCsvRows([
+      {
+        date: "2025-03-01",
+        description: "Seed",
+        amount: "-1",
+        account: accountLabel,
+      },
+    ]);
     const id = await getAccountId(accountLabel);
     const res = await req("DELETE", `/accounts/${id}`);
     expect(res.status).toBe(204);
@@ -213,36 +296,13 @@ describe("Accounts", () => {
 // ── uploads ───────────────────────────────────────────────────────────────────
 
 describe("Uploads", () => {
-  const chequingLabel = "Uploads Test — Chequing";
-  const visaLabel = "Uploads Test — Visa";
-  const savingsLabel = "Uploads Test — Savings";
-  const someAccountLabel = "Some Account";
-  const tdLabel = "Uploads Test — TD";
-  const rbcLabel = "Uploads Test — RBC";
-  const amexLabel = "Uploads Test — Amex";
-  const cibcLabel = "Uploads Test — CIBC";
-
-  afterAll(async () => {
-    for (const label of [
-      chequingLabel,
-      visaLabel,
-      savingsLabel,
-      someAccountLabel,
-      tdLabel,
-      rbcLabel,
-      amexLabel,
-      cibcLabel,
-    ]) {
-      await deleteAccountByLabel(label);
-    }
-  });
-
   it("POST /api/uploads — accepts within upload without review", async () => {
+    const accountLabel = trackAccount(uniqueLabel("Uploads Duplicate Free"));
     const txn = {
       date: "2015-10-29",
       description: "Some Test Transaction 123456",
       amount: "-123456.78",
-      account: visaLabel,
+      account: accountLabel,
     };
     const res = await uploadCsv([{ ...txn }, { ...txn }], "airlines.csv");
     const data = (await res.json()) as {
@@ -259,6 +319,8 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — inserts transactions and creates accounts automatically", async () => {
+    const chequingLabel = trackAccount(uniqueLabel("Uploads Chequing"));
+    const visaLabel = trackAccount(uniqueLabel("Uploads Visa"));
     const res = await uploadCsv(
       [
         {
@@ -302,6 +364,15 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — skips duplicate rows on second upload", async () => {
+    const chequingLabel = trackAccount(uniqueLabel("Uploads Duplicate Seed"));
+    await seedCsvRows([
+      {
+        date: "2025-03-01",
+        description: "Grocery Store",
+        amount: "-82.5",
+        account: chequingLabel,
+      },
+    ]);
     const res = await uploadCsv(
       [
         {
@@ -337,6 +408,7 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads/finalize — inserts only the selected reviewed rows", async () => {
+    const chequingLabel = trackAccount(uniqueLabel("Uploads Finalize"));
     const res = await finalizeUpload([
       {
         date: "2025-03-15",
@@ -357,6 +429,17 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads/finalize — allows duplicates when explicitly requested", async () => {
+    const chequingLabel = trackAccount(
+      uniqueLabel("Uploads Finalize Duplicate"),
+    );
+    await seedCsvRows([
+      {
+        date: "2025-03-01",
+        description: "Grocery Store",
+        amount: "-82.5",
+        account: chequingLabel,
+      },
+    ]);
     const res = await finalizeUpload([
       {
         date: "2025-03-01",
@@ -384,20 +467,29 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — merging: reuses existing accounts, creates only new ones", async () => {
-    // chequingLabel and visaLabel already exist; savingsLabel does not
+    const existingLabel = trackAccount(uniqueLabel("Uploads Merge Existing"));
+    const newLabel = trackAccount(uniqueLabel("Uploads Merge New"));
+    await seedCsvRows([
+      {
+        date: "2025-04-01",
+        description: "Seed Existing",
+        amount: "-1",
+        account: existingLabel,
+      },
+    ]);
     const res = await uploadCsv(
       [
         {
           date: "2025-04-01",
           description: "Existing Account Txn",
           amount: "-20.0",
-          account: chequingLabel,
+          account: existingLabel,
         },
         {
           date: "2025-04-01",
           description: "New Account Txn",
           amount: "500.0",
-          account: savingsLabel,
+          account: newLabel,
         },
       ],
       "mixed.csv",
@@ -411,18 +503,19 @@ describe("Uploads", () => {
     expect(data.format).toBe("generic_csv");
     expect(data.summary.inserted).toBe(2);
 
-    // Exactly 3 test accounts — no duplicate account created for chequingLabel
+    // Only the two test labels should be present.
     const { data: accounts } = await json<Array<{ label: string }>>(
       "GET",
       "/accounts",
     );
     const testAccounts = accounts.filter((a) =>
-      [chequingLabel, visaLabel, savingsLabel].includes(a.label),
+      [existingLabel, newLabel].includes(a.label),
     );
-    expect(testAccounts.length).toBe(3);
+    expect(testAccounts.length).toBe(2);
   });
 
   it("POST /api/uploads — rejects non-CAD currency", async () => {
+    const someAccountLabel = trackAccount(uniqueLabel("Uploads Non CAD"));
     const csv = `date,description,amount,currency,account\n2025-03-01,Something,-10.00,USD,${someAccountLabel}`;
     const form = new FormData();
     form.append("file", new Blob([csv], { type: "text/csv" }), "usd.csv");
@@ -434,13 +527,14 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — rejects CSV with wrong date format (yyyy/mm/dd)", async () => {
+    const someAccountLabel = trackAccount(uniqueLabel("Uploads Bad Csv Date"));
     const res = await uploadCsv(
       [
         {
           date: "2025/03/01", // wrong format — must be yyyy-mm-dd
           description: "Something",
           amount: "-10.0",
-          account: "Some Account",
+          account: someAccountLabel,
         },
       ],
       "bad-date.csv",
@@ -451,13 +545,14 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — rejects JSON with wrong date format (yyyy/mm/dd)", async () => {
+    const someAccountLabel = trackAccount(uniqueLabel("Uploads Bad Json Date"));
     const jsonBody = JSON.stringify([
       {
         date: "2025/03/01", // wrong format — must be yyyy-mm-dd
         description: "Something",
         amount: -10.0,
         currency: "CAD",
-        account: "Some Account",
+        account: someAccountLabel,
       },
     ]);
     const form = new FormData();
@@ -474,6 +569,7 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — accepts valid JSON upload", async () => {
+    const chequingLabel = trackAccount(uniqueLabel("Uploads Json"));
     const jsonBody = JSON.stringify([
       {
         date: "2025-04-02",
@@ -503,6 +599,7 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — uploads TD Canada fixture", async () => {
+    const tdLabel = trackAccount(uniqueLabel("Uploads TD"));
     const res = await uploadFixture("td.csv", "td_canada", tdLabel);
     const data = (await res.json()) as {
       status: string;
@@ -517,6 +614,7 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — uploads RBC Canada fixture", async () => {
+    const rbcLabel = trackAccount(uniqueLabel("Uploads RBC"));
     const res = await uploadFixture("rbc.csv", "rbc_canada", rbcLabel);
     const data = (await res.json()) as {
       status: string;
@@ -531,6 +629,7 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — uploads Amex Canada fixture", async () => {
+    const amexLabel = trackAccount(uniqueLabel("Uploads Amex"));
     const res = await uploadFixture("amex.csv", "amex_canada", amexLabel);
     const data = (await res.json()) as {
       status: string;
@@ -545,6 +644,7 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — uploads CIBC fixture", async () => {
+    const cibcLabel = trackAccount(uniqueLabel("Uploads CIBC"));
     const res = await uploadFixture("cibc.csv", "cibc_canada", cibcLabel);
     const data = (await res.json()) as {
       status: string;
@@ -590,6 +690,21 @@ describe("Uploads", () => {
   });
 
   it("POST /api/uploads — duplicate review response includes format", async () => {
+    const chequingLabel = trackAccount(uniqueLabel("Uploads Review Format"));
+    await seedCsvRows([
+      {
+        date: "2025-03-01",
+        description: "Grocery Store",
+        amount: "-82.5",
+        account: chequingLabel,
+      },
+      {
+        date: "2025-03-15",
+        description: "Internet Bill",
+        amount: "-59.99",
+        account: chequingLabel,
+      },
+    ]);
     const res = await uploadCsv(
       [
         {
@@ -623,12 +738,12 @@ describe("Uploads", () => {
 // ── transactions ──────────────────────────────────────────────────────────────
 
 describe("Transactions", () => {
-  const accountLabel = "Transactions Test";
   let accountId: string;
   let transactionId: string;
 
-  beforeAll(async () => {
-    await uploadCsvOk([
+  beforeEach(async () => {
+    const accountLabel = trackAccount(uniqueLabel("Transactions Test"));
+    await seedCsvRows([
       {
         date: "2025-03-01",
         description: "Grocery Store",
@@ -649,10 +764,8 @@ describe("Transactions", () => {
       },
     ]);
     accountId = await getAccountId(accountLabel);
-  });
-
-  afterAll(async () => {
-    if (accountId) await req("DELETE", `/accounts/${accountId}`);
+    const rows = await getTransactionsForAccount(accountId);
+    transactionId = rows[0]!.id;
   });
 
   it("GET /api/transactions — returns paginated list", async () => {
@@ -661,7 +774,7 @@ describe("Transactions", () => {
       total: number;
       page: number;
       limit: number;
-    }>("GET", "/transactions");
+    }>("GET", `/transactions?accountId=${accountId}`);
 
     expect(status).toBe(200);
     expect(Array.isArray(data.data)).toBe(true);
@@ -685,7 +798,7 @@ describe("Transactions", () => {
   it("GET /api/transactions — filters by date range", async () => {
     const { status, data } = await json<{ data: Array<{ date: string }> }>(
       "GET",
-      "/transactions?dateFrom=2025-03-01&dateTo=2025-03-31",
+      `/transactions?accountId=${accountId}&dateFrom=2025-03-01&dateTo=2025-03-31`,
     );
     expect(status).toBe(200);
     for (const txn of data.data) {
@@ -697,7 +810,7 @@ describe("Transactions", () => {
   it("GET /api/transactions — filters by type=expense", async () => {
     const { status, data } = await json<{ data: Array<{ amount: number }> }>(
       "GET",
-      "/transactions?type=expense",
+      `/transactions?accountId=${accountId}&type=expense`,
     );
     expect(status).toBe(200);
     for (const txn of data.data) {
@@ -708,7 +821,7 @@ describe("Transactions", () => {
   it("GET /api/transactions — filters by type=income", async () => {
     const { status, data } = await json<{ data: Array<{ amount: number }> }>(
       "GET",
-      "/transactions?type=income",
+      `/transactions?accountId=${accountId}&type=income`,
     );
     expect(status).toBe(200);
     for (const txn of data.data) {
@@ -773,29 +886,27 @@ describe("Transactions", () => {
 // ── tags ──────────────────────────────────────────────────────────────────────
 
 describe("Tags", () => {
-  let tagId: string;
-
-  afterAll(async () => {
-    if (tagId) await req("DELETE", `/tags/${tagId}`);
-  });
-
   it("POST /api/tags — creates a tag", async () => {
+    const tagName = trackTag(uniqueLabel("groceries"));
     const { status, data } = await json<{ id: string; name: string }>(
       "POST",
       "/tags",
-      { name: "groceries" },
+      { name: tagName },
     );
     expect(status).toBe(201);
     expect(data.id).toBeTruthy();
-    expect(data.name).toBe("groceries");
-    tagId = data.id;
+    expect(data.name).toBe(tagName);
   });
 
   it("POST /api/tags — rejects duplicate name", async () => {
+    const tagName = trackTag(uniqueLabel("groceries"));
+    await json<{ id: string; name: string }>("POST", "/tags", {
+      name: tagName,
+    });
     const { status, data } = await json<{ error: { code: string } }>(
       "POST",
       "/tags",
-      { name: "groceries" },
+      { name: tagName },
     );
     expect(status).toBe(409);
     expect(data.error.code).toBe("CONFLICT");
@@ -812,6 +923,10 @@ describe("Tags", () => {
   });
 
   it("GET /api/tags — lists tags including the created one", async () => {
+    const tagName = trackTag(uniqueLabel("groceries"));
+    await json<{ id: string; name: string }>("POST", "/tags", {
+      name: tagName,
+    });
     const { status, data } = await json<Array<{ id: string; name: string }>>(
       "GET",
       "/tags",
@@ -819,21 +934,20 @@ describe("Tags", () => {
     expect(status).toBe(200);
     expect(Array.isArray(data)).toBe(true);
     const names = data.map((t) => t.name);
-    expect(names).toContain("groceries");
+    expect(names).toContain(tagName);
   });
 });
 
 // ── bulk-tag ──────────────────────────────────────────────────────────────────
 
 describe("Transactions — bulk tag", () => {
-  const accountLabel = "Bulk Tag Test";
-  let accountId: string;
-  let tagId: string;
   let transactionId: string;
-  const tagName = "bulk-test-groceries";
+  let tagName: string;
 
-  beforeAll(async () => {
-    await uploadCsvOk([
+  beforeEach(async () => {
+    const accountLabel = trackAccount(uniqueLabel("Bulk Tag Test"));
+    tagName = trackTag(uniqueLabel("bulk-test-groceries"));
+    await seedCsvRows([
       {
         date: "2025-04-01",
         description: "Grocery Store",
@@ -841,29 +955,11 @@ describe("Transactions — bulk tag", () => {
         account: accountLabel,
       },
     ]);
-    accountId = await getAccountId(accountLabel);
-
-    const { data: txResult } = await json<{ data: Array<{ id: string }> }>(
-      "GET",
-      `/transactions?accountId=${accountId}`,
-    );
-    transactionId = txResult.data[0]!.id;
-
+    const accountId = await getAccountId(accountLabel);
+    const rows = await getTransactionsForAccount(accountId);
+    transactionId = rows[0]!.id;
     const tag = await json<{ id: string }>("POST", "/tags", { name: tagName });
-    tagId = tag.data.id;
-  });
-
-  afterAll(async () => {
-    // Clean up any auto-created tags from the "creates unknown tags" test
-    const { data: tagsData } = await json<Array<{ id: string; name: string }>>(
-      "GET",
-      "/tags",
-    );
-    const autoTag = tagsData.find((t) => t.name === "new-auto-created-tag");
-    if (autoTag) await req("DELETE", `/tags/${autoTag.id}`);
-
-    if (tagId) await req("DELETE", `/tags/${tagId}`);
-    if (accountId) await req("DELETE", `/accounts/${accountId}`);
+    expect(tag.data.id).toBeTruthy();
   });
 
   it("POST /api/transactions/bulk-tag — adds tags", async () => {
@@ -881,6 +977,11 @@ describe("Transactions — bulk tag", () => {
   });
 
   it("GET /api/transactions/:id — has tag after bulk-tag", async () => {
+    await json("POST", "/transactions/bulk-tag", {
+      transactionIds: [transactionId],
+      tagNames: [tagName],
+      action: "add",
+    });
     const { data } = await json<{ tags: string[] }>(
       "GET",
       `/transactions/${transactionId}`,
@@ -889,6 +990,11 @@ describe("Transactions — bulk tag", () => {
   });
 
   it("POST /api/transactions/bulk-tag — removes tags", async () => {
+    await json("POST", "/transactions/bulk-tag", {
+      transactionIds: [transactionId],
+      tagNames: [tagName],
+      action: "add",
+    });
     const { status, data } = await json<{ updated: number }>(
       "POST",
       "/transactions/bulk-tag",
@@ -903,9 +1009,10 @@ describe("Transactions — bulk tag", () => {
   });
 
   it("POST /api/transactions/bulk-tag — creates unknown tags on add", async () => {
+    const unknownTag = trackTag(uniqueLabel("new-auto-created-tag"));
     const { status } = await json("POST", "/transactions/bulk-tag", {
       transactionIds: [transactionId],
-      tagNames: ["new-auto-created-tag"],
+      tagNames: [unknownTag],
       action: "add",
     });
     expect(status).toBe(200);
@@ -939,12 +1046,12 @@ describe("Transactions — bulk tag", () => {
 // ── bulk-delete ──────────────────────────────────────────────────────────────
 
 describe("Transactions — bulk delete", () => {
-  const accountLabel = "Bulk Delete Test";
   let accountId: string;
   let transactionIds: string[] = [];
 
-  beforeAll(async () => {
-    await uploadCsvOk([
+  beforeEach(async () => {
+    const accountLabel = trackAccount(uniqueLabel("Bulk Delete Test"));
+    await seedCsvRows([
       {
         date: "2025-05-01",
         description: "Delete Me 1",
@@ -959,16 +1066,8 @@ describe("Transactions — bulk delete", () => {
       },
     ]);
     accountId = await getAccountId(accountLabel);
-
-    const { data: txResult } = await json<{ data: Array<{ id: string }> }>(
-      "GET",
-      `/transactions?accountId=${accountId}`,
-    );
-    transactionIds = txResult.data.map((t) => t.id);
-  });
-
-  afterAll(async () => {
-    if (accountId) await req("DELETE", `/accounts/${accountId}`);
+    const rows = await getTransactionsForAccount(accountId);
+    transactionIds = rows.map((t) => t.id);
   });
 
   it("POST /api/transactions/bulk-delete — deletes multiple transactions", async () => {
@@ -982,6 +1081,13 @@ describe("Transactions — bulk delete", () => {
   });
 
   it("GET /api/transactions — no longer returns deleted rows", async () => {
+    const { status } = await json<{ deleted: number }>(
+      "POST",
+      "/transactions/bulk-delete",
+      { transactionIds },
+    );
+    expect(status).toBe(200);
+
     const { data } = await json<{ data: Array<{ id: string }> }>(
       "GET",
       `/transactions?accountId=${accountId}`,
@@ -990,8 +1096,8 @@ describe("Transactions — bulk delete", () => {
   });
 
   it("POST /api/transactions/bulk-delete — rejects missing ids without deleting anything", async () => {
-    const accountLabel2 = "Bulk Delete Safety";
-    await uploadCsvOk([
+    const accountLabel2 = trackAccount(uniqueLabel("Bulk Delete Safety"));
+    await seedCsvRows([
       {
         date: "2025-05-03",
         description: "Keep Me",
@@ -1021,21 +1127,16 @@ describe("Transactions — bulk delete", () => {
       `/transactions?accountId=${safeAccountId}`,
     );
     expect(after.data.data).toHaveLength(beforeCount);
-
-    await req("DELETE", `/accounts/${safeAccountId}`);
   });
 });
 
 // ── auto-tag rules ────────────────────────────────────────────────────────────
 
 describe("Auto-tag rules", () => {
-  const accountLabel = "Rules Test";
-  let accountId: string;
   let tagId: string;
-  let ruleId: string;
-
-  beforeAll(async () => {
-    await uploadCsvOk([
+  beforeEach(async () => {
+    const accountLabel = trackAccount(uniqueLabel("Rules Test"));
+    await seedCsvRows([
       {
         date: "2025-04-01",
         description: "Grocery Store",
@@ -1049,18 +1150,9 @@ describe("Auto-tag rules", () => {
         account: accountLabel,
       },
     ]);
-    accountId = await getAccountId(accountLabel);
-
-    const tag = await json<{ id: string }>("POST", "/tags", {
-      name: "rules-test-groceries",
-    });
+    const tagName = trackTag(uniqueLabel("rules-test-groceries"));
+    const tag = await json<{ id: string }>("POST", "/tags", { name: tagName });
     tagId = tag.data.id;
-  });
-
-  afterAll(async () => {
-    if (ruleId) await req("DELETE", `/rules/${ruleId}`); // no-op if already deleted by test
-    if (tagId) await req("DELETE", `/tags/${tagId}`);
-    if (accountId) await req("DELETE", `/accounts/${accountId}`);
   });
 
   it("POST /api/rules — creates a rule", async () => {
@@ -1076,7 +1168,7 @@ describe("Auto-tag rules", () => {
     });
     expect(status).toBe(201);
     expect(data.id).toBeTruthy();
-    ruleId = data.id;
+    trackRule(data.id);
   });
 
   it("POST /api/rules — rejects rule with no conditions", async () => {
@@ -1105,16 +1197,40 @@ describe("Auto-tag rules", () => {
   });
 
   it("GET /api/rules — lists rules including the created one", async () => {
+    const created = await json<{ id: string }>("POST", "/rules", {
+      tagId,
+      conditions: [
+        {
+          matchField: "description",
+          matchType: "contains",
+          matchValue: "Grocery",
+        },
+      ],
+    });
+    trackRule(created.data.id);
+
     const { status, data } = await json<Array<{ id: string }>>("GET", "/rules");
     expect(status).toBe(200);
     expect(Array.isArray(data)).toBe(true);
-    expect(data.map((r) => r.id)).toContain(ruleId);
+    expect(data.map((r) => r.id)).toContain(created.data.id);
   });
 
   it("PUT /api/rules/:id — updates a rule", async () => {
+    const created = await json<{ id: string }>("POST", "/rules", {
+      tagId,
+      conditions: [
+        {
+          matchField: "description",
+          matchType: "contains",
+          matchValue: "Grocery",
+        },
+      ],
+    });
+    trackRule(created.data.id);
+
     const { status, data } = await json<{ id: string }>(
       "PUT",
-      `/rules/${ruleId}`,
+      `/rules/${created.data.id}`,
       {
         tagId,
         conditions: [
@@ -1128,13 +1244,25 @@ describe("Auto-tag rules", () => {
       },
     );
     expect(status).toBe(200);
-    expect(data.id).toBe(ruleId);
+    expect(data.id).toBe(created.data.id);
   });
 
   it("POST /api/rules/:id/apply — applies rule retroactively", async () => {
+    const created = await json<{ id: string }>("POST", "/rules", {
+      tagId,
+      conditions: [
+        {
+          matchField: "description",
+          matchType: "contains",
+          matchValue: "Grocery",
+        },
+      ],
+    });
+    trackRule(created.data.id);
+
     const { status, data } = await json<{ matched: number; tagged: number }>(
       "POST",
-      `/rules/${ruleId}/apply`,
+      `/rules/${created.data.id}/apply`,
     );
     expect(status).toBe(200);
     expect(typeof data.matched).toBe("number");
@@ -1143,35 +1271,56 @@ describe("Auto-tag rules", () => {
   });
 
   it("POST /api/rules/apply-all — applies all rules", async () => {
+    const created = await json<{ id: string }>("POST", "/rules", {
+      tagId,
+      conditions: [
+        {
+          matchField: "description",
+          matchType: "contains",
+          matchValue: "Grocery",
+        },
+      ],
+    });
+    trackRule(created.data.id);
+
     const { status, data } = await json<{ matched: number; tagged: number }>(
       "POST",
       "/rules/apply-all",
     );
     expect(status).toBe(200);
     expect(typeof data.matched).toBe("number");
+    expect(typeof data.tagged).toBe("number");
   });
 
   it("DELETE /api/rules/:id — deletes a rule", async () => {
-    const res = await req("DELETE", `/rules/${ruleId}`);
-    expect(res.status).toBe(204);
-  });
+    const created = await json<{ id: string }>("POST", "/rules", {
+      tagId,
+      conditions: [
+        {
+          matchField: "description",
+          matchType: "contains",
+          matchValue: "Grocery",
+        },
+      ],
+    });
+    trackRule(created.data.id);
 
-  it("GET /api/rules — deleted rule no longer appears", async () => {
+    const res = await req("DELETE", `/rules/${created.data.id}`);
+    expect(res.status).toBe(204);
+
     const { data } = await json<Array<{ id: string }>>("GET", "/rules");
-    expect(data.map((r) => r.id)).not.toContain(ruleId);
+    expect(data.map((r) => r.id)).not.toContain(created.data.id);
   });
 });
 
 // ── analytics ─────────────────────────────────────────────────────────────────
 
 describe("Analytics", () => {
-  const accountLabel = "Analytics Test";
-  let accountId: string;
-  let tagId: string;
-  const tagName = "analytics-groceries";
+  let tagName: string;
 
-  beforeAll(async () => {
-    await uploadCsvOk([
+  beforeEach(async () => {
+    const accountLabel = trackAccount(uniqueLabel("Analytics Test"));
+    await seedCsvRows([
       {
         date: "2025-03-01",
         description: "Grocery Store",
@@ -1191,15 +1340,14 @@ describe("Analytics", () => {
         account: accountLabel,
       },
     ]);
-    accountId = await getAccountId(accountLabel);
+    const accountId = await getAccountId(accountLabel);
 
+    tagName = trackTag(uniqueLabel("analytics-groceries"));
     const tag = await json<{ id: string }>("POST", "/tags", { name: tagName });
-    tagId = tag.data.id;
+    expect(tag.data.id).toBeTruthy();
 
-    const { data: txResult } = await json<{
-      data: Array<{ id: string; description: string }>;
-    }>("GET", `/transactions?accountId=${accountId}`);
-    const groceryIds = txResult.data
+    const rows = await getTransactionsForAccount(accountId);
+    const groceryIds = rows
       .filter((t) => t.description.includes("Grocery"))
       .map((t) => t.id);
 
@@ -1210,11 +1358,6 @@ describe("Analytics", () => {
         action: "add",
       });
     }
-  });
-
-  afterAll(async () => {
-    if (tagId) await req("DELETE", `/tags/${tagId}`);
-    if (accountId) await req("DELETE", `/accounts/${accountId}`);
   });
 
   it("GET /api/analytics/monthly-summary — returns monthly income/expense rows", async () => {
@@ -1248,10 +1391,9 @@ describe("Analytics", () => {
     );
     expect(status).toBe(200);
     expect(Array.isArray(data)).toBe(true);
-    for (const row of data) {
-      expect(typeof row.tag).toBe("string");
-      expect(row.total).toBeGreaterThan(0);
-    }
+    const row = data.find((entry) => entry.tag === tagName);
+    expect(row).toBeTruthy();
+    expect(row!.total).toBeGreaterThan(0);
   });
 
   it("GET /api/analytics/trend — returns monthly amounts for a tag", async () => {
@@ -1261,6 +1403,10 @@ describe("Analytics", () => {
     expect(status).toBe(200);
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeLessThanOrEqual(6);
+    for (const row of data) {
+      expect(typeof row.month).toBe("string");
+      expect(typeof row.amount).toBe("number");
+    }
   });
 
   it("GET /api/analytics/trend — requires tag param", async () => {
@@ -1280,7 +1426,6 @@ describe("Analytics", () => {
     expect(status).toBe(200);
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeLessThanOrEqual(5);
-    // should be sorted by absolute amount descending
     for (let i = 1; i < data.length; i++) {
       expect(Math.abs(data[i - 1]!.amount)).toBeGreaterThanOrEqual(
         Math.abs(data[i]!.amount),

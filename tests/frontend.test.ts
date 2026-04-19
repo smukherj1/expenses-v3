@@ -13,6 +13,7 @@ import {
   expect,
   beforeAll,
   beforeEach,
+  afterEach,
   afterAll,
 } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -66,6 +67,51 @@ async function deleteTagByName(name: string) {
   if (tag) await apiReq("DELETE", `/tags/${tag.id}`);
 }
 
+async function deleteRuleById(id: string) {
+  await apiReq("DELETE", `/rules/${id}`);
+}
+
+let cleanupAccountLabels: string[] = [];
+let cleanupTagNames: string[] = [];
+let cleanupRuleIds: string[] = [];
+
+function uniqueLabel(base: string): string {
+  return `${base} ${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function trackAccount(label: string): string {
+  cleanupAccountLabels.push(label);
+  return label;
+}
+
+function trackTag(name: string): string {
+  cleanupTagNames.push(name);
+  return name;
+}
+
+function trackRule(id: string): string {
+  cleanupRuleIds.push(id);
+  return id;
+}
+
+beforeEach(() => {
+  cleanupAccountLabels = [];
+  cleanupTagNames = [];
+  cleanupRuleIds = [];
+});
+
+afterEach(async () => {
+  for (const id of [...cleanupRuleIds].reverse()) {
+    await deleteRuleById(id);
+  }
+  for (const label of [...cleanupAccountLabels].reverse()) {
+    await deleteAccountByLabel(label);
+  }
+  for (const name of [...cleanupTagNames].reverse()) {
+    await deleteTagByName(name);
+  }
+});
+
 function readFixture(name: string): string {
   return readFileSync(new URL(`./data/${name}`, import.meta.url), "utf8");
 }
@@ -74,15 +120,51 @@ function makeCsv(
   rows: Array<{
     date: string;
     description: string;
-    amount: number;
+    amount: number | string;
     account: string;
   }>,
 ) {
   const header = "date,description,amount,currency,account";
   const lines = rows.map(
-    (r) => `${r.date},${r.description},${r.amount},CAD,${r.account}`,
+    (r) => `${r.date},${r.description},${String(r.amount)},CAD,${r.account}`,
   );
   return [header, ...lines].join("\n");
+}
+
+async function seedCsvRows(
+  rows: Array<{
+    date: string;
+    description: string;
+    amount: number | string;
+    account: string;
+  }>,
+  filename = `seed-${crypto.randomUUID()}.csv`,
+) {
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([makeCsv(rows)], { type: "text/csv" }),
+    filename,
+  );
+  form.append("format", "generic_csv");
+  const res = await fetch(`${API}/uploads`, { method: "POST", body: form });
+  if (!res.ok) {
+    throw new Error(`Seed upload failed: ${res.status} ${await res.text()}`);
+  }
+  return res;
+}
+
+async function getTransactionsForAccount(accountId: string) {
+  const data = await apiJson<{
+    data: Array<{
+      id: string;
+      description: string;
+      amount: number;
+      date: string;
+      accountId: string;
+    }>;
+  }>("GET", `/transactions?accountId=${accountId}&limit=100`);
+  return data.data;
 }
 
 async function uploadAndWaitForOutcome(
@@ -187,33 +269,17 @@ afterAll(async () => {
 // ── Upload ───────────────────────────────────────────────────────────────────
 
 describe("Upload", () => {
-  const csvAccountLabel = "E2E Upload CSV";
-  const jsonAccountLabel = "E2E Upload JSON";
-  const existingInstitutionLabel = "E2E Upload Existing";
-  const customInstitutionLabel = "E2E Upload Custom";
-  const reviewInstitutionLabel = "E2E Upload Review";
   let page: Page;
-
-  beforeAll(async () => {
-    page = await browser.newPage();
-  });
-
   beforeEach(async () => {
+    page = await browser.newPage();
     await page.goto(`${FRONTEND}/upload`);
-    await page.waitForLoadState("networkidle");
+    await page.waitForSelector('[data-testid="upload-format-select"]', {
+      timeout: 10000,
+    });
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await page.close();
-    for (const label of [
-      csvAccountLabel,
-      jsonAccountLabel,
-      existingInstitutionLabel,
-      customInstitutionLabel,
-      reviewInstitutionLabel,
-    ]) {
-      await deleteAccountByLabel(label);
-    }
   });
 
   it("shows the Upload page heading", async () => {
@@ -222,6 +288,7 @@ describe("Upload", () => {
   });
 
   it("uploads a CSV file and shows inserted count", async () => {
+    const csvAccountLabel = trackAccount(uniqueLabel("E2E Upload CSV"));
     const csv = makeCsv([
       {
         date: "2025-06-01",
@@ -248,6 +315,15 @@ describe("Upload", () => {
   });
 
   it("shows duplicate review and can skip duplicates", async () => {
+    const csvAccountLabel = trackAccount(uniqueLabel("E2E Upload Duplicate"));
+    await seedCsvRows([
+      {
+        date: "2025-06-01",
+        description: "Supermarket",
+        amount: -45.0,
+        account: csvAccountLabel,
+      },
+    ]);
     const csv = makeCsv([
       {
         date: "2025-06-01",
@@ -286,6 +362,17 @@ describe("Upload", () => {
   });
 
   it("can accept duplicate rows during review", async () => {
+    const csvAccountLabel = trackAccount(
+      uniqueLabel("E2E Upload Accept Duplicate"),
+    );
+    await seedCsvRows([
+      {
+        date: "2025-06-01",
+        description: "Supermarket",
+        amount: -45.0,
+        account: csvAccountLabel,
+      },
+    ]);
     const csv = makeCsv([
       {
         date: "2025-06-01",
@@ -321,6 +408,17 @@ describe("Upload", () => {
   });
 
   it("paginates duplicate review rows on the client", async () => {
+    const csvAccountLabel = trackAccount(
+      uniqueLabel("E2E Upload Review Pages"),
+    );
+    await seedCsvRows([
+      {
+        date: "2025-06-01",
+        description: "Supermarket",
+        amount: -45.0,
+        account: csvAccountLabel,
+      },
+    ]);
     const rows = Array.from({ length: 24 }, (_, index) => ({
       date: `2025-08-${String(index + 1).padStart(2, "0")}`,
       description:
@@ -364,6 +462,7 @@ describe("Upload", () => {
   });
 
   it("uploads a JSON file and shows inserted count", async () => {
+    const jsonAccountLabel = trackAccount(uniqueLabel("E2E Upload JSON"));
     const json = JSON.stringify([
       {
         date: "2025-07-01",
@@ -391,18 +490,20 @@ describe("Upload", () => {
   });
 
   it("uploads TD Canada with an existing account label", async () => {
-    await uploadAndWaitForOutcome(page, {
-      fileContent: makeCsv([
-        {
-          date: "2025-05-01",
-          description: "Seed Existing Account",
-          amount: -1.0,
-          account: existingInstitutionLabel,
-        },
-      ]),
-      filename: "existing-account-seed.csv",
-      mimeType: "text/csv",
-      format: "generic_csv",
+    const existingInstitutionLabel = trackAccount(
+      uniqueLabel("E2E Upload Existing"),
+    );
+    await seedCsvRows([
+      {
+        date: "2025-05-01",
+        description: "Seed Existing Account",
+        amount: -1.0,
+        account: existingInstitutionLabel,
+      },
+    ]);
+    await page.reload();
+    await page.waitForSelector('[data-testid="upload-format-select"]', {
+      timeout: 10000,
     });
 
     const outcome = await uploadAndWaitForOutcome(page, {
@@ -434,6 +535,9 @@ describe("Upload", () => {
   });
 
   it("uploads Amex Canada with a custom account label and creates the account", async () => {
+    const customInstitutionLabel = trackAccount(
+      uniqueLabel("E2E Upload Custom"),
+    );
     const outcome = await uploadAndWaitForOutcome(page, {
       fileContent: readFixture("amex.csv"),
       filename: "amex.csv",
@@ -454,6 +558,9 @@ describe("Upload", () => {
   });
 
   it("uploads an institution fixture through duplicate review", async () => {
+    const reviewInstitutionLabel = trackAccount(
+      uniqueLabel("E2E Upload Review"),
+    );
     const seed = await uploadAndWaitForOutcome(page, {
       fileContent: readFixture("rbc.csv"),
       filename: "rbc-seed.csv",
@@ -462,6 +569,10 @@ describe("Upload", () => {
       accountLabel: reviewInstitutionLabel,
     });
     expect(seed.kind).toBe("result");
+    await page.goto(`${FRONTEND}/upload`);
+    await page.waitForSelector('[data-testid="upload-format-select"]', {
+      timeout: 10000,
+    });
 
     const outcome = await uploadAndWaitForOutcome(page, {
       fileContent: readFixture("rbc.csv"),
@@ -488,14 +599,18 @@ describe("Upload", () => {
 // ── Transactions — view and search ────────────────────────────────────────────
 
 describe("Transactions", () => {
-  const accountLabel = "E2E Transactions";
   let page: Page;
+  let accountLabel: string;
+  let searchLabel: string;
 
-  beforeAll(async () => {
-    const csv = makeCsv([
+  beforeEach(async () => {
+    page = await browser.newPage();
+    accountLabel = trackAccount(uniqueLabel("E2E Transactions"));
+    searchLabel = `Whole Foods ${crypto.randomUUID().slice(0, 8)}`;
+    await seedCsvRows([
       {
         date: "2025-08-01",
-        description: "Whole Foods Market",
+        description: searchLabel,
         amount: -88.5,
         account: accountLabel,
       },
@@ -507,27 +622,19 @@ describe("Transactions", () => {
       },
       {
         date: "2025-08-10",
-        description: "Netflix Subscription",
+        description: `Netflix ${searchLabel}`,
         amount: -18.99,
         account: accountLabel,
       },
     ]);
-    const form = new FormData();
-    form.append("file", new Blob([csv], { type: "text/csv" }), "seed.csv");
-    form.append("format", "generic_csv");
-    await fetch(`${API}/uploads`, { method: "POST", body: form });
-
-    page = await browser.newPage();
     await page.goto(`${FRONTEND}/transactions`);
-    await page.waitForLoadState("networkidle");
     await page.waitForSelector('[data-testid="transaction-row"]', {
       timeout: 10000,
     });
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await page.close();
-    await deleteAccountByLabel(accountLabel);
   });
 
   it("shows transaction rows", async () => {
@@ -536,17 +643,13 @@ describe("Transactions", () => {
   });
 
   it("filters transactions by search query", async () => {
-    await page.locator('[data-testid="search-input"]').fill("Whole Foods");
+    await page.locator('[data-testid="search-input"]').fill(searchLabel);
     await page.waitForTimeout(800);
-    // Should still render without crashing
     const rowCount = await page
       .locator('[data-testid="transaction-row"]')
       .count();
     const emptyVisible = await isVisible(page, '[data-testid="empty-state"]');
-    expect(rowCount >= 0 || emptyVisible).toBe(true);
-    // Reset
-    await page.locator('[data-testid="search-input"]').clear();
-    await page.waitForTimeout(400);
+    expect(rowCount > 0 || emptyVisible).toBe(true);
   });
 
   it("filters transactions by type=expense", async () => {
@@ -554,8 +657,6 @@ describe("Transactions", () => {
     await page.waitForTimeout(600);
     const count = await page.locator('[data-testid="transaction-row"]').count();
     expect(count).toBeGreaterThanOrEqual(0);
-    await page.locator('[data-testid="filter-type"]').selectOption("");
-    await page.waitForTimeout(400);
   });
 
   it("filters transactions by type=income", async () => {
@@ -563,20 +664,21 @@ describe("Transactions", () => {
     await page.waitForTimeout(600);
     const count = await page.locator('[data-testid="transaction-row"]').count();
     expect(count).toBeGreaterThanOrEqual(0);
-    await page.locator('[data-testid="filter-type"]').selectOption("");
   });
 });
 
 // ── Tagging — detail page ─────────────────────────────────────────────────────
 
 describe("Tagging — detail page", () => {
-  const accountLabel = "E2E Tagging Detail";
-  const tagName = "e2e-detail-tag";
   let page: Page;
   let transactionId: string;
+  let tagName: string;
 
-  beforeAll(async () => {
-    const csv = makeCsv([
+  beforeEach(async () => {
+    page = await browser.newPage();
+    const accountLabel = trackAccount(uniqueLabel("E2E Tagging Detail"));
+    tagName = trackTag(uniqueLabel("e2e-detail-tag"));
+    await seedCsvRows([
       {
         date: "2025-09-01",
         description: "Tag Test Store Detail",
@@ -584,32 +686,24 @@ describe("Tagging — detail page", () => {
         account: accountLabel,
       },
     ]);
-    const form = new FormData();
-    form.append("file", new Blob([csv], { type: "text/csv" }), "tag-seed.csv");
-    form.append("format", "generic_csv");
-    await fetch(`${API}/uploads`, { method: "POST", body: form });
-
-    // Find by matching description via full list (search may be FTS-only)
-    const allRes = await apiJson<{
-      data: Array<{ id: string; description: string }>;
-    }>("GET", "/transactions?limit=100");
-    const row = allRes.data.find(
-      (t) => t.description === "Tag Test Store Detail",
+    const accounts = await apiJson<Array<{ id: string; label: string }>>(
+      "GET",
+      "/accounts",
     );
-    transactionId = row?.id ?? allRes.data[0]?.id ?? "";
-
-    page = await browser.newPage();
+    const account = accounts.find((a) => a.label === accountLabel);
+    if (!account) {
+      throw new Error(`Missing account: ${accountLabel}`);
+    }
+    const rows = await getTransactionsForAccount(account.id);
+    transactionId = rows[0]!.id;
     await page.goto(`${FRONTEND}/transactions/${transactionId}`);
-    await page.waitForLoadState("networkidle");
     await page.waitForSelector('[data-testid="transaction-detail"]', {
       timeout: 10000,
     });
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await page.close();
-    await deleteAccountByLabel(accountLabel);
-    await deleteTagByName(tagName);
   });
 
   it("shows the transaction detail page", async () => {
@@ -636,6 +730,16 @@ describe("Tagging — detail page", () => {
   });
 
   it("removes the tag from the transaction", async () => {
+    await apiReq("POST", "/transactions/bulk-tag", {
+      transactionIds: [transactionId],
+      tagNames: [tagName],
+      action: "add",
+    });
+    await page.reload();
+    await page.waitForSelector(`[aria-label="Remove tag ${tagName}"]`, {
+      timeout: 10000,
+    });
+
     const removeBtn = page.locator(`[aria-label="Remove tag ${tagName}"]`);
     await removeBtn.waitFor({ state: "visible", timeout: 5000 });
     await removeBtn.click();
@@ -657,12 +761,15 @@ describe("Tagging — detail page", () => {
 // ── Tagging — bulk ────────────────────────────────────────────────────────────
 
 describe("Tagging — bulk", () => {
-  const accountLabel = "E2E Tagging Bulk";
-  const tagName = "e2e-bulk-tag";
   let page: Page;
+  let tagName: string;
+  let firstTransactionId: string;
 
-  beforeAll(async () => {
-    const csv = makeCsv([
+  beforeEach(async () => {
+    page = await browser.newPage();
+    const accountLabel = trackAccount(uniqueLabel("E2E Tagging Bulk"));
+    tagName = trackTag(uniqueLabel("e2e-bulk-tag"));
+    await seedCsvRows([
       {
         date: "2025-09-10",
         description: "Bulk Tag Store A",
@@ -676,23 +783,25 @@ describe("Tagging — bulk", () => {
         account: accountLabel,
       },
     ]);
-    const form = new FormData();
-    form.append("file", new Blob([csv], { type: "text/csv" }), "bulk-seed.csv");
-    form.append("format", "generic_csv");
-    await fetch(`${API}/uploads`, { method: "POST", body: form });
-
-    page = await browser.newPage();
+    const accounts = await apiJson<Array<{ id: string; label: string }>>(
+      "GET",
+      "/accounts",
+    );
+    const account = accounts.find((a) => a.label === accountLabel);
+    if (!account) {
+      throw new Error(`Missing account: ${accountLabel}`);
+    }
+    const rows = await getTransactionsForAccount(account.id);
+    firstTransactionId = rows[0]!.id;
+    await apiJson("POST", "/tags", { name: tagName });
     await page.goto(`${FRONTEND}/transactions`);
-    await page.waitForLoadState("networkidle");
     await page.waitForSelector('[data-testid="transaction-row"]', {
       timeout: 10000,
     });
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await page.close();
-    await deleteAccountByLabel(accountLabel);
-    await deleteTagByName(tagName);
   });
 
   it("selecting a row shows the bulk tag bar", async () => {
@@ -705,6 +814,13 @@ describe("Tagging — bulk", () => {
   });
 
   it("adds tags via the bulk tag bar", async () => {
+    const firstCheckbox = page
+      .locator('[data-testid="transaction-row"] input[type="checkbox"]')
+      .first();
+    await firstCheckbox.click();
+    await page.waitForSelector('[data-testid="bulk-tag-bar"]', {
+      timeout: 5000,
+    });
     await page.locator('[data-testid="bulk-tag-input"]').fill(tagName);
     await page.locator('[data-testid="bulk-tag-add"]').click();
     // After success, selection clears and bar hides
@@ -717,7 +833,12 @@ describe("Tagging — bulk", () => {
   });
 
   it("removes tags via the bulk tag bar", async () => {
-    // Re-select a row
+    await apiReq("POST", "/transactions/bulk-tag", {
+      transactionIds: [firstTransactionId],
+      tagNames: [tagName],
+      action: "add",
+    });
+
     const firstCheckbox = page
       .locator('[data-testid="transaction-row"] input[type="checkbox"]')
       .first();
@@ -741,12 +862,19 @@ describe("Tagging — bulk", () => {
 // ── Deletion — list page ─────────────────────────────────────────────────────
 
 describe("Deletion — list page", () => {
-  const singleAccount = "E2E Delete Single";
-  const bulkAccount = "E2E Delete Bulk";
   let page: Page;
 
-  beforeAll(async () => {
-    const singleCsv = makeCsv([
+  beforeEach(async () => {
+    page = await browser.newPage();
+  });
+
+  afterEach(async () => {
+    await page.close();
+  });
+
+  it("deletes a single selected transaction from the list", async () => {
+    const singleAccount = trackAccount(uniqueLabel("E2E Delete Single"));
+    await seedCsvRows([
       {
         date: "2025-11-01",
         description: "Frontend Delete Single Alpha",
@@ -760,50 +888,11 @@ describe("Deletion — list page", () => {
         account: singleAccount,
       },
     ]);
-    const bulkCsv = makeCsv([
-      {
-        date: "2025-11-03",
-        description: "Frontend Delete Bulk Alpha",
-        amount: -21.0,
-        account: bulkAccount,
-      },
-      {
-        date: "2025-11-04",
-        description: "Frontend Delete Bulk Beta",
-        amount: -22.0,
-        account: bulkAccount,
-      },
-    ]);
-
-    const form1 = new FormData();
-    form1.append(
-      "file",
-      new Blob([singleCsv], { type: "text/csv" }),
-      "single.csv",
-    );
-    form1.append("format", "generic_csv");
-    await fetch(`${API}/uploads`, { method: "POST", body: form1 });
-
-    const form2 = new FormData();
-    form2.append("file", new Blob([bulkCsv], { type: "text/csv" }), "bulk.csv");
-    form2.append("format", "generic_csv");
-    await fetch(`${API}/uploads`, { method: "POST", body: form2 });
-
-    page = await browser.newPage();
     await page.goto(`${FRONTEND}/transactions`);
-    await page.waitForLoadState("networkidle");
     await page.waitForSelector('[data-testid="transaction-row"]', {
       timeout: 10000,
     });
-  });
 
-  afterAll(async () => {
-    await page.close();
-    await deleteAccountByLabel(singleAccount);
-    await deleteAccountByLabel(bulkAccount);
-  });
-
-  it("deletes a single selected transaction from the list", async () => {
     await page
       .locator('[data-testid="search-input"]')
       .fill("Frontend Delete Single");
@@ -839,6 +928,26 @@ describe("Deletion — list page", () => {
   });
 
   it("deletes multiple selected transactions from the list", async () => {
+    const bulkAccount = trackAccount(uniqueLabel("E2E Delete Bulk"));
+    await seedCsvRows([
+      {
+        date: "2025-11-03",
+        description: "Frontend Delete Bulk Alpha",
+        amount: -21.0,
+        account: bulkAccount,
+      },
+      {
+        date: "2025-11-04",
+        description: "Frontend Delete Bulk Beta",
+        amount: -22.0,
+        account: bulkAccount,
+      },
+    ]);
+    await page.goto(`${FRONTEND}/transactions`);
+    await page.waitForSelector('[data-testid="transaction-row"]', {
+      timeout: 10000,
+    });
+
     await page
       .locator('[data-testid="search-input"]')
       .fill("Frontend Delete Bulk");
@@ -876,13 +985,15 @@ describe("Deletion — list page", () => {
 // ── Auto-tag rules ────────────────────────────────────────────────────────────
 
 describe("Auto-tag rules", () => {
-  const accountLabel = "E2E Rules";
-  const tagName = "e2e-rules-tag";
   let page: Page;
+  let tagName: string;
   let tagId: string;
 
-  beforeAll(async () => {
-    const csv = makeCsv([
+  beforeEach(async () => {
+    page = await browser.newPage();
+    const accountLabel = trackAccount(uniqueLabel("E2E Rules"));
+    tagName = trackTag(uniqueLabel("e2e-rules-tag"));
+    await seedCsvRows([
       {
         date: "2025-10-01",
         description: "Starbucks Coffee",
@@ -896,30 +1007,18 @@ describe("Auto-tag rules", () => {
         account: accountLabel,
       },
     ]);
-    const form = new FormData();
-    form.append(
-      "file",
-      new Blob([csv], { type: "text/csv" }),
-      "rules-seed.csv",
-    );
-    form.append("format", "generic_csv");
-    await fetch(`${API}/uploads`, { method: "POST", body: form });
-
     const tag = await apiJson<{ id: string }>("POST", "/tags", {
       name: tagName,
     });
-    tagId = (tag as { id: string }).id;
-
-    page = await browser.newPage();
+    tagId = tag.id;
     await page.goto(`${FRONTEND}/rules`);
-    await page.waitForLoadState("networkidle");
+    await page.waitForSelector('[data-testid="new-rule-btn"]', {
+      timeout: 10000,
+    });
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await page.close();
-    await deleteAccountByLabel(accountLabel);
-    if (tagId) await apiReq("DELETE", `/tags/${tagId}`);
-    else await deleteTagByName(tagName);
   });
 
   it("shows the Rules page heading", async () => {
@@ -937,6 +1036,18 @@ describe("Auto-tag rules", () => {
   });
 
   it("creates a rule: description contains Starbucks → tag", async () => {
+    await page.locator('[data-testid="new-rule-btn"]').click();
+    await page.waitForSelector('[data-testid="create-rule-form"]', {
+      timeout: 5000,
+    });
+    await page.waitForFunction(
+      (name) =>
+        Array.from(
+          document.querySelectorAll('[data-testid="rule-tag-select"] option'),
+        ).some((option) => option.textContent === name),
+      tagName,
+      { timeout: 5000 },
+    );
     await page
       .locator('[data-testid="rule-tag-select"]')
       .selectOption({ label: tagName });
@@ -950,11 +1061,32 @@ describe("Auto-tag rules", () => {
     await page.locator('[data-testid="rule-submit-btn"]').click();
 
     await page.waitForSelector('[data-testid="rule-card"]', { timeout: 8000 });
+    const rules = await apiJson<Array<{ id: string }>>("GET", "/rules");
+    const createdRule = rules[rules.length - 1];
+    if (!createdRule) {
+      throw new Error("Rule was not created");
+    }
+    trackRule(createdRule.id);
     const count = await page.locator('[data-testid="rule-card"]').count();
     expect(count).toBeGreaterThanOrEqual(1);
   });
 
   it("applies the rule retroactively and shows match result", async () => {
+    const created = await apiJson<{ id: string }>("POST", "/rules", {
+      tagId,
+      conditions: [
+        {
+          matchField: "description",
+          matchType: "contains",
+          matchValue: "Starbucks",
+        },
+      ],
+    });
+    trackRule(created.id);
+    await page.reload();
+    await page.waitForSelector('[data-testid="apply-rule-btn"]', {
+      timeout: 10000,
+    });
     await page.locator('[data-testid="apply-rule-btn"]').first().click();
     await page.waitForSelector('[data-testid^="apply-result"]', {
       timeout: 10000,
@@ -968,6 +1100,21 @@ describe("Auto-tag rules", () => {
   });
 
   it("deletes the rule", async () => {
+    const created = await apiJson<{ id: string }>("POST", "/rules", {
+      tagId,
+      conditions: [
+        {
+          matchField: "description",
+          matchType: "contains",
+          matchValue: "Starbucks",
+        },
+      ],
+    });
+    trackRule(created.id);
+    await page.reload();
+    await page.waitForSelector('[data-testid="rule-card"]', {
+      timeout: 10000,
+    });
     const countBefore = await page.locator('[data-testid="rule-card"]').count();
     await page.locator('[data-testid="delete-rule-btn"]').first().click();
     await page.waitForTimeout(1000);
@@ -979,15 +1126,13 @@ describe("Auto-tag rules", () => {
 // ── Settings — accounts ───────────────────────────────────────────────────────
 
 describe("Settings", () => {
-  const accountLabel = "E2E Settings Account";
   let page: Page;
+  let accountLabel: string;
 
-  beforeAll(async () => {
-    // Clean up any leftover account from a previous run so the upload
-    // always creates it fresh and the account is guaranteed to be in the list.
-    await deleteAccountByLabel(accountLabel);
-
-    const csv = makeCsv([
+  beforeEach(async () => {
+    page = await browser.newPage();
+    accountLabel = trackAccount(uniqueLabel("E2E Settings Account"));
+    await seedCsvRows([
       {
         date: "2025-11-01",
         description: "Settings Test Txn",
@@ -995,29 +1140,15 @@ describe("Settings", () => {
         account: accountLabel,
       },
     ]);
-    const form = new FormData();
-    form.append(
-      "file",
-      new Blob([csv], { type: "text/csv" }),
-      "settings-seed.csv",
-    );
-    form.append("format", "generic_csv");
-    await fetch(`${API}/uploads`, { method: "POST", body: form });
-
-    page = await browser.newPage();
     await page.goto(`${FRONTEND}/settings`);
-    await page.waitForLoadState("networkidle");
-    // Wait for the specific account row, not just any accounts-list, so we
-    // know the seeded account is actually visible before the tests run.
     await page
       .locator('[data-testid="accounts-list"] li')
       .filter({ hasText: accountLabel })
       .waitFor({ state: "visible", timeout: 10000 });
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await page.close();
-    await deleteAccountByLabel(accountLabel); // no-op if test deleted it
   });
 
   it("lists accounts including the seeded account", async () => {
