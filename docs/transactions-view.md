@@ -51,7 +51,7 @@ Both pages render transaction-like rows with pagination, sorting, and filtering 
   - Description search maps to `q`.
   - Date range maps to `dateFrom` and `dateTo`.
   - Amount range maps to `amountMin` and `amountMax`.
-  - Account label should be exposed in the UI and map to an account identifier accepted by the backend.
+  - Account label should be exposed in the UI as an exact account selector backed by `GET /api/accounts`, and should send the selected account id as `accountId`.
   - Existing type/tag filters should remain compatible with the new shared filter model.
 - Sorting:
   - Date, description, amount, and account headers should be clickable if shown.
@@ -86,7 +86,7 @@ Both pages render transaction-like rows with pagination, sorting, and filtering 
 - Review decisions:
   - Current row selection decisions must persist when rows are hidden by filters or moved by sorting.
   - Selection state should continue to be keyed by stable upload `rowNumber`, not by visible index.
-  - Non-duplicate rows remain included by default and should not become accidentally excludable unless that is accepted as a separate product change.
+  - Non-duplicate rows remain included by default and disabled in the review table. Broad row exclusion belongs in a separate upload edit/reconciliation feature.
 
 ### Non-Goals
 
@@ -206,7 +206,7 @@ Client sorting behavior:
 - If the user clicks a new sort column, set that column with `asc`.
 - Reset page to `1`.
 - Persist `/transactions` sort in URL params.
-- Keep duplicate review sort in component state unless a refresh-preserved review URL is explicitly desired.
+- Keep duplicate review sort in component state. Persisting review decisions matters; persisting view preferences is out of scope for this update.
 
 ### Filtering Contract
 
@@ -236,7 +236,8 @@ Implementation notes:
   - One-sided ranges are allowed.
   - If both are present, `amountMin <= amountMax`.
 - Account label UI should use `GET /api/accounts` and send the selected account id as `accountId`.
-- If free-text account label search is desired, add a separate backend `accountLabel` filter rather than overloading `accountId`.
+- Amount filtering uses signed amounts as stored in the ledger. Expense helper text should make clear that expenses are negative.
+- Free-text account label search is out of scope for this update. If later needed, add a separate backend `accountLabel` filter rather than overloading `accountId`.
 
 #### Duplicate Review
 
@@ -282,15 +283,21 @@ If later product work introduces persisted duplicate markers, then duplicate sta
 
 ### Component API Sketch
 
+`TransactionListTable` should have an explicit documented props contract in the implementation. Future readers should not need to inspect component internals to know what each prop expects, which page owns each behavior, or when callbacks fire.
+
 ```tsx
 <TransactionListTable
   rows={rows}
   columns={columns}
   sort={{ column, order }}
+  sortableColumns={["date", "description", "amount", "account"]}
   onSortChange={setSort}
   selection={selection}
+  getRowSelected={(row) => selectedKeys.has(row.key)}
+  isRowSelectable={(row) => row.duplicate !== false}
   onToggleRow={toggleRow}
   onTogglePage={togglePage}
+  getRowHref={(row) => row.href}
   getRowTone={(row) => (row.duplicate ? "warning" : "default")}
   emptyMessage="No transactions found"
 />
@@ -304,11 +311,124 @@ The table should remain controlled. Parent pages own:
 - Mutations and finalize actions.
 - URL params.
 
+### TransactionListTable Props Contract
+
+Add a detailed API comment above the exported `TransactionListTableProps` type or interface. The implementation comment should cover the following props and behavior.
+
+| Prop                    | Type                                                             | Required | Behavior                                                                                                                                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rows`                  | `TransactionListRow[]`                                           | Yes      | Already-filtered, already-sorted, already-paginated rows to render. The table does not fetch, sort, filter, or paginate internally.                                                                                                |
+| `columns`               | `TransactionListColumn[]`                                        | Yes      | Ordered columns to render. Supported values are `select`, `date`, `description`, `amount`, `account`, `tags`, and `duplicateStatus`. The component renders columns exactly in this order.                                          |
+| `sort`                  | `TransactionListSort \| null`                                    | No       | Current active sort state for header display. When `null`, no column is visually marked as sorted. The table does not reorder rows.                                                                                                |
+| `sortableColumns`       | `SortColumn[]`                                                   | No       | Columns whose headers are clickable. A visible column is not sortable unless it is present here. Omit or pass `[]` to render all headers as static.                                                                                |
+| `onSortChange`          | `(next: TransactionListSort) => void`                            | No       | Called only when the user clicks a sortable header. Clicking a new sortable column emits `{ column, order: "asc" }`. Clicking the active column toggles `asc`/`desc`. Parent must update rows, reset page, and sync URL if needed. |
+| `selection`             | `TransactionListSelection \| null`                               | No       | Controlled page-selection summary. When omitted or `null`, row and page selection controls are not rendered even if `columns` contains `select`.                                                                                   |
+| `getRowSelected`        | `(row: TransactionListRow) => boolean`                           | No       | Returns whether a row checkbox is checked. Required when selection controls are rendered. For `/transactions`, use persisted transaction ids. For `/upload/duplicates`, use stable upload row numbers.                             |
+| `isRowSelectable`       | `(row: TransactionListRow) => boolean`                           | No       | Determines whether a row checkbox is enabled. Defaults to `true`. Duplicate review should return `row.duplicate === true` so non-duplicates remain included and disabled.                                                          |
+| `onToggleRow`           | `(row: TransactionListRow) => void`                              | No       | Called when the user toggles an enabled row checkbox. Not called for disabled rows. Parent owns selected or included state updates.                                                                                                |
+| `onTogglePage`          | `(rows: TransactionListRow[], nextChecked: boolean) => void`     | No       | Called when the header checkbox is toggled. Receives only currently rendered selectable rows, not all rows matching server filters. Parent decides how to apply page-level selection.                                              |
+| `getRowHref`            | `(row: TransactionListRow) => string \| undefined`               | No       | Optional row detail link provider. If provided for a row, the description cell renders as a link. If omitted or returns `undefined`, description renders as plain text.                                                            |
+| `getRowTone`            | `(row: TransactionListRow) => "default" \| "warning" \| "muted"` | No       | Optional visual row tone. Duplicate review can return `"warning"` for duplicates. Defaults to `"default"`.                                                                                                                         |
+| `emptyMessage`          | `string`                                                         | No       | Message shown when `rows.length === 0` and `loading` is false. Defaults to `"No transactions found"`.                                                                                                                              |
+| `loading`               | `boolean`                                                        | No       | When true, renders a loading state instead of rows. Selection and sort callbacks are not triggered while the loading placeholder is shown.                                                                                         |
+| `testId`                | `string`                                                         | No       | Base `data-testid` for the table. Defaults to `transaction-table`. Row test ids should remain stable and derive from row keys.                                                                                                     |
+| `formatAmount`          | `(row: TransactionListRow) => string`                            | No       | Optional amount formatter. Defaults to signed fixed-point amount plus currency when currency is present. Parent can override if display conventions change.                                                                        |
+| `renderTags`            | `(row: TransactionListRow) => React.ReactNode`                   | No       | Optional custom tag renderer for persisted transactions. If omitted, tags render as plain labels or the tags column can be omitted.                                                                                                |
+| `renderDuplicateStatus` | `(row: TransactionListRow) => React.ReactNode`                   | No       | Optional duplicate-status renderer. If omitted, duplicate rows show `Duplicate` and non-duplicate rows show `Included`. Only used when `duplicateStatus` is present.                                                               |
+
+Recommended supporting types:
+
+```ts
+type SortColumn =
+  | "date"
+  | "description"
+  | "amount"
+  | "account"
+  | "duplicateStatus";
+
+type SortOrder = "asc" | "desc";
+
+type TransactionListSort = {
+  column: SortColumn;
+  order: SortOrder;
+};
+
+type TransactionListColumn =
+  | "select"
+  | "date"
+  | "description"
+  | "amount"
+  | "account"
+  | "tags"
+  | "duplicateStatus";
+
+type TransactionListRow = {
+  key: string;
+  date: string;
+  description: string;
+  amount: number;
+  currency?: "CAD";
+  accountLabel?: string;
+  tags?: string[];
+  duplicate?: boolean;
+  included?: boolean;
+  href?: string;
+};
+
+type TransactionListSelection = {
+  pageSelected: boolean;
+  pageIndeterminate: boolean;
+};
+```
+
+Recommended implementation comment:
+
+```ts
+/**
+ * Controlled table for transaction-shaped rows.
+ *
+ * TransactionListTable is presentational only:
+ * - It does not fetch data.
+ * - It does not own URL params.
+ * - It does not sort, filter, or paginate rows internally.
+ * - It does not mutate selection state.
+ * - It does not know about upload finalization or transaction bulk actions.
+ *
+ * Parent pages must pass rows in the exact order and page slice that should be
+ * displayed. Callback methods only report user intent.
+ *
+ * Sorting:
+ * - A column is clickable only when it appears in sortableColumns.
+ * - Clicking a new sortable column calls onSortChange({ column, order: "asc" }).
+ * - Clicking the active sortable column toggles order.
+ * - The table does not reset pagination; parent must do that.
+ * - The table does not update URL params; /transactions owns that behavior.
+ *
+ * Selection:
+ * - Row selection is controlled by getRowSelected and onToggleRow.
+ * - Disabled rows, as determined by isRowSelectable, do not trigger onToggleRow.
+ * - The page checkbox only applies to currently rendered selectable rows.
+ * - onTogglePage never means "select all rows matching current server filters."
+ * - /transactions should key selection by persisted transaction id.
+ * - /upload/duplicates should key selection by stable upload rowNumber.
+ *
+ * Column rendering:
+ * - columns controls both presence and order.
+ * - A visible column is not automatically sortable.
+ * - Duplicate-only columns should be configured by the duplicate review page.
+ * - Tags should only be rendered when the tags column is included.
+ *
+ * Row identity:
+ * - row.key must be stable across filtering, sorting, and pagination.
+ * - Do not use visible row index as a key or callback identifier.
+ */
+```
+
 ### Backend Changes Needed For This Feature
 
 - `backend/src/schemas/transaction.ts`:
   - Change `order` default from `desc` to `asc`.
-  - Add `account` to the `sort` enum if account sorting is required.
+  - Add `account` to the `sort` enum.
 - `backend/src/services/transactionService.ts`:
   - Support account-label sorting.
   - Add stable secondary sort.
@@ -341,7 +461,7 @@ Add or update tests in `tests/backend.test.ts`:
 - `GET /api/transactions` sorts by amount and description:
   - Verify numeric amount order, not lexicographic string order.
   - Verify description order.
-- `GET /api/transactions` sorts by account label if implemented:
+- `GET /api/transactions` sorts by account label:
   - Seed at least two accounts.
   - Assert account sort order.
 - `GET /api/transactions` filters by amount range:
@@ -368,7 +488,7 @@ Add or update tests in `tests/frontend.test.ts`:
   - Click Date header and assert order toggles.
   - Click Amount header and assert numeric amount order.
   - Click Description header and assert alphabetical order.
-  - If account sorting is implemented, click Account header and assert account-label order.
+  - Click Account header and assert account-label order.
   - Assert URL params update with `sort`, `order`, and reset `page=1`.
 - Transactions filters:
   - Enter description search and assert matching rows remain.
@@ -421,89 +541,3 @@ Add stable `data-testid` values for shared controls:
 - `duplicate-visibility`.
 
 Keep existing selectors where possible to avoid broad test churn. If selector names change as part of the shared component extraction, update tests in the same PR.
-
-## Open Questions
-
-### 1. Should account filtering use account id or free-text account label?
-
-Options:
-
-- Use account id from `GET /api/accounts`.
-- Add backend support for `accountLabel` text matching.
-- Support both exact account selection and free-text label contains.
-
-Recommendation:
-
-Use account id for this update. It is already supported by the backend and avoids ambiguous labels. Add free-text account label search later only if users need partial account matching.
-
-### 2. Should account sorting be required in the first implementation?
-
-Options:
-
-- Add backend account-label sorting now.
-- Keep sorting limited to date, description, and amount for `/transactions`, while duplicate review can sort account client-side.
-- Fetch account labels client-side and sort the current page only.
-
-Recommendation:
-
-Add backend account-label sorting now if the account column is visible on `/transactions`. Sorting only the current page would be misleading with server-side pagination.
-
-### 3. Should duplicate review support description, amount, date, and account filters too?
-
-Options:
-
-- Only add duplicate visibility filtering.
-- Add the full common filter panel to duplicate review.
-- Add a smaller review-specific filter panel with duplicate visibility plus optional description search.
-
-Recommendation:
-
-Start with duplicate visibility only. Full filtering may be useful for very large uploads, but it adds review complexity and is not required by the current duplicate triage workflow.
-
-### 4. Should duplicate review pagination remain client-side?
-
-Options:
-
-- Keep client-side pagination over the stateless review payload.
-- Introduce persisted upload review sessions and server-side pagination/filtering/sorting.
-- Hybrid: keep stateless finalize but store the review payload in IndexedDB for large uploads.
-
-Recommendation:
-
-Keep client-side pagination. The current backend design explicitly avoids persisted review sessions, and upload files are capped at 10 MB. Revisit server-side review sessions only if review payload size or browser memory becomes a real issue.
-
-### 5. Should non-duplicate rows be deselectable in duplicate review?
-
-Options:
-
-- Keep non-duplicates always included and disabled in the review table.
-- Allow users to exclude any row during duplicate review.
-- Add a separate "review all rows" mode that unlocks non-duplicate row exclusion.
-
-Recommendation:
-
-Keep non-duplicates always included for this update. The page is specifically for duplicate review, and broad row exclusion belongs in a separate upload edit/reconciliation feature.
-
-### 6. Should sorting persist across duplicate review page reloads?
-
-Options:
-
-- Keep duplicate review sorting/filtering in component state only.
-- Store duplicate review view state alongside the upload review payload.
-- Put duplicate review state in URL params.
-
-Recommendation:
-
-Keep it in component state. Persisting review decisions matters; persisting view preferences does not unless users report reload/navigation pain.
-
-### 7. How should amount range filtering handle expenses?
-
-Options:
-
-- Use signed amounts exactly as stored, so expenses are negative.
-- Provide separate absolute-value amount filtering.
-- Provide a transaction type toggle plus signed amount inputs.
-
-Recommendation:
-
-Use signed amounts for now because that matches the canonical ledger model. Improve labels and helper text so users understand that expenses are negative. If users expect "amount between 10 and 50" to include `-10` through `-50`, add absolute-value filtering later as a distinct UX.
