@@ -9,8 +9,8 @@ export const listTransactionsSchema = z.object({
   accountId: z.string().uuid().optional(),
   tags: z.string().optional(),
   type: z.enum(["income", "expense"]).optional(),
-  sort: z.enum(["date", "amount", "description"]).default("date"),
-  order: z.enum(["asc", "desc"]).default("desc"),
+  sort: z.enum(["date", "amount", "description", "account"]).default("date"),
+  order: z.enum(["asc", "desc"]).default("asc"),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });

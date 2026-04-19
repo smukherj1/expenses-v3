@@ -8,7 +8,7 @@
 | **Charts**           | Recharts                                      | Composable, declarative charting built on React + D3.                                      |
 | **Backend**          | Hono + TypeScript                             | Lightweight, fast, runs on Node.js. Built-in middleware ecosystem.                         |
 | **Validation**       | Zod + `@hono/zod-validator`                   | Shared schema definitions for request/response validation and OpenAPI generation.          |
-| **Database**         | PostgreSQL 16                                 | Full-text search, date/range queries, aggregate functions.                                 |
+| **Database**         | PostgreSQL 16                                 | Relational integrity, indexed date/account queries, range filters, aggregate functions.    |
 | **ORM**              | Drizzle ORM                                   | Type-safe queries, lightweight, SQL-first philosophy.                                      |
 | **File parsing**     | Papa Parse (CSV), native `JSON.parse`         | Papa Parse handles quoted fields and powers generic plus institution-specific CSV parsers. |
 | **Runtime**          | Bun                                           | Super fast NodeJS runtime.                                                                 |
@@ -48,8 +48,8 @@ The frontend is a React SPA with client-side routing. See [frontend/design.md](f
 Key capabilities:
 
 - **Dashboard** — Summary cards (income, expenses, net) with monthly bar chart and category pie chart
-- **Upload** — Drag-and-drop file upload with explicit format selection, account-label selection for institution imports, a dedicated duplicate review route, client-side review pagination, and stateless finalize flow
-- **Transactions** — Full-text search, multi-field filters, sortable/paginated table, bulk tagging and bulk deletion via row selection
+- **Upload** — Drag-and-drop file upload with explicit format selection, account-label selection for institution imports, a dedicated duplicate review route, client-side review filtering/sorting/pagination, and stateless finalize flow
+- **Transactions** — Description substring search, multi-field filters, URL-backed sortable/paginated table, bulk tagging and bulk deletion via row selection
 - **Transaction detail** — View and edit tags for a single transaction
 - **Rules** — Create/edit/delete auto-tag rules with AND conditions, apply retroactively
 - **Analytics** — Filterable charts: monthly bar, category pie, trend line, top-N table; drill-down to filtered transaction list
@@ -63,7 +63,7 @@ Key capabilities:
 
 - **Accounts** — CRUD for user-defined account labels (e.g. "TD Chequing")
 - **Uploads** — Multipart file upload for generic CSV/JSON and supported Canadian institution CSV exports, parsing, duplicate detection, auto-tag on ingest
-- **Transactions** — Full-text search, multi-field filtering, pagination, sorting, bulk tagging, bulk deletion
+- **Transactions** — Description substring search, multi-field filtering, pagination, sorting, bulk tagging, bulk deletion
 - **Tags** — User-scoped string tags, applied to transactions individually or in bulk
 - **Auto-tag rules** — Condition-based rules (AND logic) that auto-apply tags; can run retroactively
 - **Analytics** — Aggregation queries for monthly summaries, category breakdowns, trends, and top-N lists
@@ -72,7 +72,7 @@ Key capabilities:
 
 - 8 tables: `users`, `accounts`, `uploads`, `transactions`, `tags`, `transaction_tags`, `auto_tag_rules`, `auto_tag_rule_conditions`
 - A default user is seeded; all requests use a hardcoded user ID until auth is added
-- Full-text search via PostgreSQL GIN index on transaction descriptions
+- Transaction list indexes support user/date and account lookups; description search currently uses case-insensitive substring matching
 - Only CAD currency accepted for now (enforced at parse + DB level)
 
 ## Cross-Cutting Concerns

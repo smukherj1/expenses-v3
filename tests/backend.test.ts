@@ -739,10 +739,11 @@ describe("Uploads", () => {
 
 describe("Transactions", () => {
   let accountId: string;
+  let accountLabel: string;
   let transactionId: string;
 
   beforeEach(async () => {
-    const accountLabel = trackAccount(uniqueLabel("Transactions Test"));
+    accountLabel = trackAccount(uniqueLabel("Transactions Test"));
     await seedCsvRows([
       {
         date: "2025-03-01",
@@ -768,9 +769,9 @@ describe("Transactions", () => {
     transactionId = rows[0]!.id;
   });
 
-  it("GET /api/transactions — returns paginated list", async () => {
+  it("GET /api/transactions — defaults to date ascending", async () => {
     const { status, data } = await json<{
-      data: Array<{ id: string }>;
+      data: Array<{ id: string; date: string }>;
       total: number;
       page: number;
       limit: number;
@@ -781,7 +782,103 @@ describe("Transactions", () => {
     expect(typeof data.total).toBe("number");
     expect(data.page).toBe(1);
     expect(data.limit).toBe(50);
+    expect(data.data.map((row) => row.date)).toEqual([
+      "2025-03-01",
+      "2025-03-05",
+      "2025-03-10",
+    ]);
     transactionId = data.data[0]!.id;
+  });
+
+  it("GET /api/transactions — sorts by amount, description, and account", async () => {
+    const accountLabelLow = trackAccount(
+      uniqueLabel("0 Transactions Sort Low"),
+    );
+    const accountLabelHigh = trackAccount(
+      uniqueLabel("Z Transactions Sort High"),
+    );
+    await seedCsvRows([
+      {
+        date: "2025-03-02",
+        description: "Low Sort Store",
+        amount: "-10.0",
+        account: accountLabelLow,
+      },
+      {
+        date: "2025-03-03",
+        description: "High Sort Store",
+        amount: "-11.0",
+        account: accountLabelHigh,
+      },
+    ]);
+
+    const amountAsc = await json<{ data: Array<{ amount: number }> }>(
+      "GET",
+      `/transactions?accountId=${accountId}&sort=amount&order=asc`,
+    );
+    expect(amountAsc.status).toBe(200);
+    expect(amountAsc.data.data.map((row) => row.amount)).toEqual([
+      -82.5, -6.75, 3200,
+    ]);
+
+    const descriptionAsc = await json<{ data: Array<{ description: string }> }>(
+      "GET",
+      `/transactions?accountId=${accountId}&sort=description&order=asc`,
+    );
+    expect(descriptionAsc.status).toBe(200);
+    expect(descriptionAsc.data.data.map((row) => row.description)).toEqual([
+      "Coffee Shop",
+      "Grocery Store",
+      "Payroll Deposit",
+    ]);
+
+    const accountAsc = await json<{
+      data: Array<{ accountLabel: string }>;
+    }>("GET", `/transactions?accountId=${accountId}&sort=account&order=asc`);
+    expect(accountAsc.status).toBe(200);
+    expect(accountAsc.data.data.map((row) => row.accountLabel)).toEqual(
+      Array(accountAsc.data.data.length).fill(accountLabel),
+    );
+
+    const combinedAccounts = await json<{
+      data: Array<{ accountLabel: string }>;
+    }>("GET", `/transactions?sort=account&order=asc&limit=10`);
+    expect(combinedAccounts.status).toBe(200);
+    expect(combinedAccounts.data.data.map((row) => row.accountLabel)).toEqual([
+      accountLabelLow,
+      accountLabel,
+      accountLabel,
+      accountLabel,
+      accountLabelHigh,
+    ]);
+    expect(combinedAccounts.data.data[0]!.accountLabel).toBe(accountLabelLow);
+    expect(
+      combinedAccounts.data.data[combinedAccounts.data.data.length - 1]!
+        .accountLabel,
+    ).toBe(accountLabelHigh);
+  });
+
+  it("GET /api/transactions — filters by amount range", async () => {
+    const bounded = await json<{ data: Array<{ amount: number }> }>(
+      "GET",
+      `/transactions?accountId=${accountId}&amountMin=-20&amountMax=0`,
+    );
+    expect(bounded.status).toBe(200);
+    expect(bounded.data.data.map((row) => row.amount)).toEqual([-6.75]);
+
+    const minOnly = await json<{ data: Array<{ amount: number }> }>(
+      "GET",
+      `/transactions?accountId=${accountId}&amountMin=0`,
+    );
+    expect(minOnly.status).toBe(200);
+    expect(minOnly.data.data.map((row) => row.amount)).toEqual([3200]);
+
+    const maxOnly = await json<{ data: Array<{ amount: number }> }>(
+      "GET",
+      `/transactions?accountId=${accountId}&amountMax=-20`,
+    );
+    expect(maxOnly.status).toBe(200);
+    expect(maxOnly.data.data.map((row) => row.amount)).toEqual([-82.5]);
   });
 
   it("GET /api/transactions — filters by accountId", async () => {
@@ -848,6 +945,36 @@ describe("Transactions", () => {
     );
     expect(status).toBe(400);
     expect(data.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("GET /api/transactions — keeps pagination stable with repeated sort values", async () => {
+    const stableAccountLabel = trackAccount(uniqueLabel("Transactions Stable"));
+    const stableRows = Array.from({ length: 30 }, (_, index) => ({
+      date: "2025-04-01",
+      description: `Stable Row ${String(index + 1).padStart(2, "0")}`,
+      amount: -1,
+      account: stableAccountLabel,
+    }));
+    await seedCsvRows(stableRows);
+
+    const first = await json<{ data: Array<{ id: string }> }>(
+      "GET",
+      `/transactions?sort=date&order=asc&limit=10`,
+    );
+    const second = await json<{ data: Array<{ id: string }> }>(
+      "GET",
+      `/transactions?sort=date&order=asc&limit=10&page=2`,
+    );
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(first.data.data.map((row) => row.id)).not.toEqual(
+      second.data.data.map((row) => row.id),
+    );
+    const overlap = first.data.data.filter((row) =>
+      second.data.data.some((other) => other.id === row.id),
+    );
+    expect(overlap).toHaveLength(0);
   });
 
   it("GET /api/transactions/:id — returns single transaction with tags", async () => {

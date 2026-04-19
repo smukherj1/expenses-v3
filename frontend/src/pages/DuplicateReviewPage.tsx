@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import Pagination from "../components/Pagination.tsx";
+import TransactionListTable from "../components/TransactionListTable.tsx";
 import {
   finalizeUpload,
   type FinalizeUploadRow,
@@ -12,8 +13,16 @@ import {
   loadUploadReviewSession,
   type UploadReviewSession,
 } from "../lib/uploadReviewStore.ts";
+import {
+  filterReviewRows,
+  formatAmount,
+  sortTransactionRows,
+  type TransactionListSort,
+} from "../lib/transactionList.ts";
 
 type SelectionMap = Record<number, boolean>;
+
+const DEFAULT_SORT: TransactionListSort = { column: "date", order: "asc" };
 
 function initialSelection(rows: UploadRow[]): SelectionMap {
   return Object.fromEntries(rows.map((row) => [row.rowNumber, !row.duplicate]));
@@ -45,6 +54,10 @@ export default function DuplicateReviewPage() {
   );
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [sort, setSort] = useState<TransactionListSort>(DEFAULT_SORT);
+  const [duplicateVisibility, setDuplicateVisibility] = useState<
+    "all" | "duplicates" | "nonDuplicates"
+  >("all");
   const [submitting, setSubmitting] = useState(false);
   const [finalResult, setFinalResult] = useState<FinalizeUploadResult | null>(
     null,
@@ -52,11 +65,37 @@ export default function DuplicateReviewPage() {
   const [error, setError] = useState<string | null>(null);
 
   const rows = useMemo(() => session?.result.transactions ?? [], [session]);
+  const totalRows = rows.length;
   const duplicateCount = session?.result.summary.duplicates ?? 0;
-  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+
+  const filteredRows = useMemo(
+    () =>
+      filterReviewRows(
+        rows.map((row) => ({
+          key: String(row.rowNumber),
+          date: row.date,
+          description: row.description,
+          amount: row.amount,
+          currency: row.currency,
+          accountLabel: row.account,
+          duplicate: row.duplicate,
+          included: !row.duplicate,
+        })),
+        duplicateVisibility,
+      ),
+    [duplicateVisibility, rows],
+  );
+
+  const sortedRows = useMemo(
+    () => sortTransactionRows(filteredRows, sort),
+    [filteredRows, sort],
+  );
+
+  const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const safePage = Math.min(page, pageCount);
   const startIndex = (safePage - 1) * pageSize;
-  const visibleRows = rows.slice(startIndex, startIndex + pageSize);
+  const visibleRows = sortedRows.slice(startIndex, startIndex + pageSize);
+  const visibleSelectableRows = visibleRows.filter((row) => row.duplicate);
 
   const selectedDuplicateCount = useMemo(
     () =>
@@ -68,6 +107,13 @@ export default function DuplicateReviewPage() {
     () => rows.filter((row) => selection[row.rowNumber]).length,
     [rows, selection],
   );
+
+  const duplicateFilterLabel =
+    duplicateVisibility === "duplicates"
+      ? "Duplicates only"
+      : duplicateVisibility === "nonDuplicates"
+        ? "Non-duplicates only"
+        : "All rows";
 
   function updateSelection(rowNumbers: number[], accepted: boolean) {
     setSelection((current) => {
@@ -179,7 +225,7 @@ export default function DuplicateReviewPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Duplicate Review</h1>
           <p className="text-sm text-gray-600 mt-1">
-            {session.sourceFileName} · {session.result.format} · {rows.length}{" "}
+            {session.sourceFileName} · {session.result.format} · {totalRows}{" "}
             rows · {duplicateCount} duplicates
           </p>
         </div>
@@ -214,8 +260,33 @@ export default function DuplicateReviewPage() {
       <div className="bg-white border rounded-xl p-4 text-sm flex flex-wrap items-center gap-4">
         <span className="text-gray-700" data-testid="duplicate-review-count">
           {includedCount} included, {selectedDuplicateCount} duplicate
-          {selectedDuplicateCount === 1 ? "" : "s"} selected
+          {selectedDuplicateCount === 1 ? "" : "s"} selected, showing{" "}
+          {sortedRows.length} filtered rows ({duplicateFilterLabel})
         </span>
+        <div className="flex items-center gap-2">
+          <label
+            className="text-gray-500"
+            htmlFor="duplicate-review-visibility"
+          >
+            Visibility
+          </label>
+          <select
+            id="duplicate-review-visibility"
+            value={duplicateVisibility}
+            onChange={(e) => {
+              setDuplicateVisibility(
+                e.target.value as "all" | "duplicates" | "nonDuplicates",
+              );
+              setPage(1);
+            }}
+            className="border rounded-lg px-2 py-1"
+            data-testid="duplicate-review-visibility"
+          >
+            <option value="all">All rows</option>
+            <option value="duplicates">Duplicates only</option>
+            <option value="nonDuplicates">Non-duplicates only</option>
+          </select>
+        </div>
         <div className="flex items-center gap-2">
           <label className="text-gray-500" htmlFor="duplicate-review-page-size">
             Rows per page
@@ -276,73 +347,69 @@ export default function DuplicateReviewPage() {
       )}
 
       <div className="bg-white border rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
-            <tr className="text-left">
-              <th className="w-12 px-4 py-3" />
-              <th className="px-4 py-3">Date</th>
-              <th className="px-4 py-3">Description</th>
-              <th className="px-4 py-3">Amount</th>
-              <th className="px-4 py-3">Account</th>
-              <th className="px-4 py-3">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleRows.map((row) => (
-              <tr
-                key={row.rowNumber}
-                className={row.duplicate ? "bg-amber-50/60" : "bg-white"}
-                data-testid="duplicate-review-row"
-              >
-                <td className="px-4 py-3 align-top">
-                  <input
-                    type="checkbox"
-                    checked={selection[row.rowNumber] ?? false}
-                    disabled={!row.duplicate}
-                    onChange={() =>
-                      setSelection((current) => ({
-                        ...current,
-                        [row.rowNumber]: !current[row.rowNumber],
-                      }))
-                    }
-                    className="mt-1 h-4 w-4 rounded border-gray-300"
-                    data-testid={`duplicate-review-row-${row.rowNumber}`}
-                  />
-                </td>
-                <td className="px-4 py-3 align-top text-gray-700">
-                  {row.date}
-                </td>
-                <td className="px-4 py-3 align-top text-gray-900">
-                  {row.description}
-                </td>
-                <td className="px-4 py-3 align-top text-gray-700">
-                  {row.amount} {row.currency}
-                </td>
-                <td className="px-4 py-3 align-top text-gray-700">
-                  {row.account}
-                </td>
-                <td className="px-4 py-3 align-top">
-                  {row.duplicate ? (
-                    <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-900">
-                      Duplicate
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800">
-                      Included
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <TransactionListTable
+          rows={visibleRows}
+          columns={[
+            "select",
+            "date",
+            "description",
+            "amount",
+            "account",
+            "duplicateStatus",
+          ]}
+          sort={sort}
+          sortableColumns={[
+            "date",
+            "description",
+            "amount",
+            "account",
+            "duplicateStatus",
+          ]}
+          onSortChange={(next) => {
+            setSort(next);
+            setPage(1);
+          }}
+          selection={{
+            pageSelected:
+              visibleSelectableRows.filter((row) => selection[Number(row.key)])
+                .length > 0,
+            pageIndeterminate:
+              visibleSelectableRows.filter((row) => selection[Number(row.key)])
+                .length > 0 &&
+              visibleSelectableRows.filter((row) => selection[Number(row.key)])
+                .length < visibleSelectableRows.length,
+          }}
+          getRowSelected={(row) => selection[Number(row.key)] ?? false}
+          isRowSelectable={(row) => row.duplicate === true}
+          onToggleRow={(row) =>
+            updateSelection(
+              [Number(row.key)],
+              !(selection[Number(row.key)] ?? false),
+            )
+          }
+          onTogglePage={(pageRows, nextChecked) => {
+            updateSelection(
+              pageRows
+                .filter((row) => row.duplicate)
+                .map((row) => Number(row.key)),
+              nextChecked,
+            );
+          }}
+          getRowTone={(row) => (row.duplicate ? "warning" : "muted")}
+          renderDuplicateStatus={(row) =>
+            row.duplicate ? "Duplicate" : "Included"
+          }
+          emptyMessage="No review rows match the current filter"
+          testId="duplicate-review-row"
+          formatAmount={formatAmount}
+        />
       </div>
 
       <Pagination
         page={safePage}
-        total={rows.length}
+        total={sortedRows.length}
         limit={pageSize}
-        onPage={setPage}
+        onPage={(nextPage) => setPage(nextPage)}
       />
     </div>
   );

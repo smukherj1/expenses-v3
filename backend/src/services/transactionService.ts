@@ -27,7 +27,7 @@ export async function listTransactions(
     accountId?: string;
     tags?: string;
     type?: "income" | "expense";
-    sort: "date" | "amount" | "description";
+    sort: "date" | "amount" | "description" | "account";
     order: "asc" | "desc";
     page: number;
     limit: number;
@@ -35,12 +35,7 @@ export async function listTransactions(
 ) {
   const conditions: SQL[] = [];
 
-  // User filter via accounts
-  conditions.push(
-    sql`${transactions.accountId} IN (
-      SELECT id FROM accounts WHERE user_id = ${userId}::uuid
-    )`,
-  );
+  conditions.push(eq(accounts.userId, userId));
 
   if (params.accountId) {
     conditions.push(eq(transactions.accountId, params.accountId));
@@ -67,9 +62,7 @@ export async function listTransactions(
   }
 
   if (params.q) {
-    conditions.push(
-      sql`to_tsvector('english', ${transactions.description}) @@ plainto_tsquery('english', ${params.q})`,
-    );
+    conditions.push(sql`${transactions.description} ILIKE ${`%${params.q}%`}`);
   }
 
   if (params.tags) {
@@ -91,22 +84,36 @@ export async function listTransactions(
       ? transactions.date
       : params.sort === "amount"
         ? transactions.amount
-        : transactions.description;
+        : params.sort === "account"
+          ? accounts.label
+          : transactions.description;
   const orderFn = params.order === "asc" ? asc : desc;
 
   const offset = (params.page - 1) * params.limit;
 
   const [rows, countResult] = await Promise.all([
     db
-      .select()
+      .select({
+        id: transactions.id,
+        userId: transactions.userId,
+        accountId: transactions.accountId,
+        date: transactions.date,
+        description: transactions.description,
+        amount: transactions.amount,
+        currency: transactions.currency,
+        createdAt: transactions.createdAt,
+        accountLabel: accounts.label,
+      })
       .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
       .where(whereClause)
-      .orderBy(orderFn(sortCol))
+      .orderBy(orderFn(sortCol), asc(transactions.id))
       .limit(params.limit)
       .offset(offset),
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
       .where(whereClause),
   ]);
 

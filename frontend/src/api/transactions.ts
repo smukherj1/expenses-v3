@@ -3,6 +3,7 @@ import { get, patch, del, post } from "./client.ts";
 export interface Transaction {
   id: string;
   accountId: string;
+  accountLabel: string;
   date: string;
   description: string;
   amount: number;
@@ -30,7 +31,7 @@ export interface ListParams {
   accountId?: string;
   tags?: string;
   type?: "income" | "expense";
-  sort?: "date" | "amount" | "description";
+  sort?: "date" | "amount" | "description" | "account";
   order?: "asc" | "desc";
   page?: number;
   limit?: number;

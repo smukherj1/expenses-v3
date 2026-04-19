@@ -1,27 +1,89 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  keepPreviousData,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useSearchParams } from "react-router";
 import {
   listTransactions,
   bulkTag,
   bulkDeleteTransactions,
   type ListParams,
 } from "../api/transactions.ts";
-import { useQuery as useTagsQuery } from "@tanstack/react-query";
-import { getTags } from "../api/tags.ts";
+import { getAccounts } from "../api/accounts.ts";
 import Pagination from "../components/Pagination.tsx";
-import TagBadge from "../components/TagBadge.tsx";
 import ConfirmDialog from "../components/ConfirmDialog.tsx";
+import TransactionListTable from "../components/TransactionListTable.tsx";
+import type {
+  TransactionListColumn,
+  TransactionListRow,
+  TransactionListSort,
+} from "../lib/transactionList.ts";
+
+const DEFAULT_SORT: TransactionListSort = { column: "date", order: "asc" };
+const DEFAULT_LIMIT = 50;
+type TransactionSortColumn = Exclude<
+  TransactionListSort["column"],
+  "duplicateStatus"
+>;
+
+function normalizeAmount(value: string): number | undefined {
+  if (value.trim() === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
 
 export default function TransactionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
 
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    let changed = false;
+    if (!next.get("sort")) {
+      next.set("sort", DEFAULT_SORT.column);
+      changed = true;
+    }
+    if (!next.get("order")) {
+      next.set("order", DEFAULT_SORT.order);
+      changed = true;
+    }
+    if (!next.get("page")) {
+      next.set("page", "1");
+      changed = true;
+    }
+    if (!next.get("limit")) {
+      next.set("limit", String(DEFAULT_LIMIT));
+      changed = true;
+    }
+    if (changed) {
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
   const q = searchParams.get("q") ?? "";
   const dateFrom = searchParams.get("dateFrom") ?? "";
   const dateTo = searchParams.get("dateTo") ?? "";
-  const type = (searchParams.get("type") as ListParams["type"]) ?? undefined;
+  const amountMin = searchParams.get("amountMin") ?? "";
+  const amountMax = searchParams.get("amountMax") ?? "";
+  const accountId = searchParams.get("accountId") ?? "";
+  const type = (searchParams.get("type") as ListParams["type"]) ?? "";
+  const tags = searchParams.get("tags") ?? "";
+  const sort =
+    (searchParams.get("sort") as TransactionSortColumn) ?? DEFAULT_SORT.column;
+  const order =
+    (searchParams.get("order") as TransactionListSort["order"]) ??
+    DEFAULT_SORT.order;
   const page = Number(searchParams.get("page") ?? "1");
+
+  const amountMinValue = normalizeAmount(amountMin);
+  const amountMaxValue = normalizeAmount(amountMax);
+  const amountRangeInvalid =
+    amountMinValue !== undefined &&
+    amountMaxValue !== undefined &&
+    amountMinValue > amountMaxValue;
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkTagInput, setBulkTagInput] = useState("");
@@ -32,24 +94,56 @@ export default function TransactionsPage() {
     q: q || undefined,
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
-    type,
+    amountMin: amountMinValue,
+    amountMax: amountMaxValue,
+    accountId: accountId || undefined,
+    type: type || undefined,
+    tags: tags || undefined,
+    sort,
+    order,
     page,
-    limit: 50,
+    limit: DEFAULT_LIMIT,
   };
 
   const { data, isLoading } = useQuery({
     queryKey: ["transactions", params],
     queryFn: () => listTransactions(params),
+    enabled: !amountRangeInvalid,
+    placeholderData: keepPreviousData,
   });
 
-  const { data: tags = [] } = useTagsQuery({
-    queryKey: ["tags"],
-    queryFn: getTags,
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: getAccounts,
     staleTime: 5 * 60_000,
   });
 
-  const rows = data?.data ?? [];
-  const allSelected = rows.length > 0 && selectedIds.size === rows.length;
+  const rows = useMemo<TransactionListRow[]>(
+    () =>
+      (data?.data ?? []).map((txn) => ({
+        key: txn.id,
+        date: txn.date,
+        description: txn.description,
+        amount: txn.amount,
+        currency: txn.currency,
+        accountLabel: txn.accountLabel,
+        href: `/transactions/${txn.id}`,
+      })),
+    [data?.data],
+  );
+
+  const selectedCount = selectedIds.size;
+  const allSelected =
+    rows.length > 0 && rows.every((row) => selectedIds.has(row.key));
+
+  const columns: TransactionListColumn[] = [
+    "select",
+    "date",
+    "description",
+    "amount",
+    "account",
+    "tags",
+  ];
 
   const bulkMutation = useMutation({
     mutationFn: ({
@@ -81,7 +175,7 @@ export default function TransactionsPage() {
       setBulkError(null);
 
       if (shouldGoPrevPage) {
-        setParam("page", String(page - 1));
+        updateSearchParams({ page: String(page - 1) });
       }
 
       qc.invalidateQueries({ queryKey: ["transactions"] });
@@ -89,14 +183,51 @@ export default function TransactionsPage() {
     onError: (e: Error) => setBulkError(e.message),
   });
 
+  const updateSearchParams = useCallback(
+    (
+      updates: Record<string, string | undefined>,
+      options?: { resetPage?: boolean; replace?: boolean },
+    ) => {
+      const next = new URLSearchParams(searchParams);
+      for (const [key, value] of Object.entries(updates)) {
+        if (value && value.length > 0) {
+          next.set(key, value);
+        } else {
+          next.delete(key);
+        }
+      }
+      if (options?.resetPage !== false) {
+        next.set("page", "1");
+      }
+      setSearchParams(next, { replace: options?.replace ?? false });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  useEffect(() => {
+    if (!data?.total) return;
+
+    const totalPages = Math.max(1, Math.ceil(data.total / DEFAULT_LIMIT));
+    if (page > totalPages) {
+      updateSearchParams(
+        { page: String(totalPages) },
+        { resetPage: false, replace: true },
+      );
+    }
+  }, [data?.total, page, searchParams, setSearchParams, updateSearchParams]);
+
   function setParam(key: string, value: string) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (value) next.set(key, value);
-      else next.delete(key);
-      next.delete("page");
-      return next;
-    });
+    updateSearchParams({ [key]: value });
+  }
+
+  function setSort(next: TransactionListSort) {
+    updateSearchParams(
+      {
+        sort: next.column,
+        order: next.order,
+      },
+      { resetPage: true },
+    );
   }
 
   function toggleSelect(id: string) {
@@ -106,14 +237,6 @@ export default function TransactionsPage() {
       else next.add(id);
       return next;
     });
-  }
-
-  function toggleAll() {
-    if (selectedIds.size === rows.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(rows.map((r) => r.id)));
-    }
   }
 
   function handleBulkAction(action: "add" | "remove") {
@@ -132,7 +255,6 @@ export default function TransactionsPage() {
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Transactions</h1>
 
-      {/* Filters */}
       <div className="bg-white rounded-xl border p-4 mb-4 flex flex-wrap gap-3 items-end">
         <div className="flex-1 min-w-48">
           <label className="block text-xs text-gray-500 mb-1">Search</label>
@@ -166,9 +288,47 @@ export default function TransactionsPage() {
           />
         </div>
         <div>
+          <label className="block text-xs text-gray-500 mb-1">Min amount</label>
+          <input
+            type="number"
+            step="0.01"
+            value={amountMin}
+            onChange={(e) => setParam("amountMin", e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-sm w-32"
+            data-testid="filter-amount-min"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Max amount</label>
+          <input
+            type="number"
+            step="0.01"
+            value={amountMax}
+            onChange={(e) => setParam("amountMax", e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-sm w-32"
+            data-testid="filter-amount-max"
+          />
+        </div>
+        <div className="min-w-48">
+          <label className="block text-xs text-gray-500 mb-1">Account</label>
+          <select
+            value={accountId}
+            onChange={(e) => setParam("accountId", e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-sm w-full"
+            data-testid="filter-account"
+          >
+            <option value="">All accounts</option>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className="block text-xs text-gray-500 mb-1">Type</label>
           <select
-            value={type ?? ""}
+            value={type}
             onChange={(e) => setParam("type", e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-sm"
             data-testid="filter-type"
@@ -179,21 +339,39 @@ export default function TransactionsPage() {
           </select>
         </div>
         <button
-          onClick={() => setSearchParams({})}
+          onClick={() => {
+            setSearchParams(
+              {
+                sort: DEFAULT_SORT.column,
+                order: DEFAULT_SORT.order,
+                page: "1",
+                limit: String(DEFAULT_LIMIT),
+              },
+              { replace: false },
+            );
+          }}
           className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-800"
         >
           Clear
         </button>
       </div>
 
-      {/* Bulk tag bar */}
-      {selectedIds.size > 0 && (
+      {amountRangeInvalid && (
+        <div
+          className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-sm text-amber-800"
+          data-testid="amount-range-error"
+        >
+          Minimum amount must be less than or equal to maximum amount.
+        </div>
+      )}
+
+      {selectedCount > 0 && (
         <div
           className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex items-center gap-3"
           data-testid="bulk-tag-bar"
         >
           <span className="text-sm text-blue-700 font-medium">
-            {selectedIds.size} selected
+            {selectedCount} selected
           </span>
           <input
             type="text"
@@ -235,100 +413,44 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* Table */}
       <div className="bg-white rounded-xl border overflow-hidden">
-        {isLoading ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Loading…</div>
-        ) : rows.length === 0 ? (
-          <div
-            className="p-8 text-center text-gray-400 text-sm"
-            data-testid="empty-state"
-          >
-            No transactions found
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="w-10 px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleAll}
-                    data-testid="select-all"
-                  />
-                </th>
-                <th className="px-4 py-3 text-left text-gray-600 font-medium">
-                  Date
-                </th>
-                <th className="px-4 py-3 text-left text-gray-600 font-medium">
-                  Description
-                </th>
-                <th className="px-4 py-3 text-right text-gray-600 font-medium">
-                  Amount
-                </th>
-                <th className="px-4 py-3 text-left text-gray-600 font-medium">
-                  Tags
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {rows.map((txn) => (
-                <tr
-                  key={txn.id}
-                  className="hover:bg-gray-50"
-                  data-testid="transaction-row"
-                >
-                  <td className="px-4 py-2.5">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(txn.id)}
-                      onChange={() => toggleSelect(txn.id)}
-                      data-testid={`select-${txn.id}`}
-                    />
-                  </td>
-                  <td className="px-4 py-2.5 text-gray-600">{txn.date}</td>
-                  <td className="px-4 py-2.5">
-                    <Link
-                      to={`/transactions/${txn.id}`}
-                      className="text-blue-600 hover:underline"
-                    >
-                      {txn.description}
-                    </Link>
-                  </td>
-                  <td
-                    className={`px-4 py-2.5 text-right font-medium tabular-nums ${
-                      txn.amount >= 0 ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    {txn.amount >= 0 ? "+" : ""}
-                    {txn.amount.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex flex-wrap gap-1">
-                      {tags
-                        .filter((t) =>
-                          (
-                            txn as unknown as { tags?: string[] }
-                          ).tags?.includes(t.name),
-                        )
-                        .map((t) => (
-                          <TagBadge key={t.id} name={t.name} />
-                        ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <TransactionListTable
+          loading={isLoading}
+          rows={rows}
+          columns={columns}
+          sort={{ column: sort, order }}
+          sortableColumns={["date", "description", "amount", "account"]}
+          onSortChange={setSort}
+          selection={{
+            pageSelected: allSelected,
+            pageIndeterminate: selectedCount > 0 && !allSelected,
+          }}
+          getRowSelected={(row) => selectedIds.has(row.key)}
+          isRowSelectable={() => true}
+          onToggleRow={(row) => toggleSelect(row.key)}
+          onTogglePage={(pageRows, nextChecked) => {
+            setSelectedIds((current) => {
+              const next = new Set(current);
+              for (const row of pageRows) {
+                if (nextChecked) next.add(row.key);
+                else next.delete(row.key);
+              }
+              return next;
+            });
+          }}
+          getRowHref={(row) => row.href}
+          emptyMessage="No transactions found"
+          testId="transaction-row"
+        />
       </div>
 
       <Pagination
         page={page}
         total={data?.total ?? 0}
-        limit={50}
-        onPage={(p) => setParam("page", String(p))}
+        limit={DEFAULT_LIMIT}
+        onPage={(nextPage) =>
+          updateSearchParams({ page: String(nextPage) }, { resetPage: false })
+        }
       />
 
       {deleteTarget && (

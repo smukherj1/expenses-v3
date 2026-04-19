@@ -413,7 +413,7 @@ describe("Upload", () => {
     );
     await seedCsvRows([
       {
-        date: "2025-06-01",
+        date: "2025-08-24",
         description: "Supermarket",
         amount: -45.0,
         account: csvAccountLabel,
@@ -422,11 +422,11 @@ describe("Upload", () => {
     const rows = Array.from({ length: 24 }, (_, index) => ({
       date: `2025-08-${String(index + 1).padStart(2, "0")}`,
       description:
-        index === 20 ? "Supermarket" : `Review Row ${String(index + 1)}`,
-      amount: index === 20 ? -45.0 : -(index + 1),
+        index === 23 ? "Supermarket" : `Review Row ${String(index + 1)}`,
+      amount: index === 23 ? -45.0 : -(index + 1),
       account: csvAccountLabel,
     })).map((row, index) =>
-      index === 20 ? { ...row, date: "2025-06-01" } : row,
+      index === 23 ? { ...row, date: "2025-08-24" } : row,
     );
     const csv = makeCsv(rows);
 
@@ -442,13 +442,13 @@ describe("Upload", () => {
       await page.locator('[data-testid="duplicate-review-row"]').count(),
     ).toBe(20);
     await page.locator('[data-testid="pagination"] button').nth(1).click();
-    await page.waitForSelector('[data-testid="duplicate-review-row-21"]', {
+    await page.waitForSelector('[data-testid="duplicate-review-row-24"]', {
       timeout: 8000,
     });
     expect(
       await page.locator('[data-testid="duplicate-review-row"]').count(),
     ).toBe(4);
-    await page.locator('[data-testid="duplicate-review-row-21"]').check();
+    await page.locator('[data-testid="duplicate-review-row-24"]').check();
     await page.locator('[data-testid="duplicate-review-finalize"]').click();
     await page.waitForSelector('[data-testid="duplicate-review-summary"]', {
       timeout: 15000,
@@ -459,6 +459,99 @@ describe("Upload", () => {
         .textContent()) ?? "";
     expect(resultText).toContain("Inserted: 24");
     expect(resultText).toContain("Duplicates: 1");
+  });
+
+  it("filters and sorts duplicate review rows on the client", async () => {
+    const csvAccountLabel = trackAccount(
+      uniqueLabel("E2E Upload Review Filter"),
+    );
+    await seedCsvRows([
+      {
+        date: "2025-06-01",
+        description: "Seed Match",
+        amount: -10.0,
+        account: csvAccountLabel,
+      },
+    ]);
+    const csv = makeCsv([
+      {
+        date: "2025-06-03",
+        description: "Zulu Row",
+        amount: -30.0,
+        account: csvAccountLabel,
+      },
+      {
+        date: "2025-06-02",
+        description: "Alpha Row",
+        amount: -20.0,
+        account: csvAccountLabel,
+      },
+      {
+        date: "2025-06-01",
+        description: "Seed Match",
+        amount: -10.0,
+        account: csvAccountLabel,
+      },
+    ]);
+
+    const outcome = await uploadAndWaitForOutcome(page, {
+      fileContent: csv,
+      filename: "e2e-review-filter.csv",
+      mimeType: "text/csv",
+      format: "generic_csv",
+    });
+
+    expect(outcome.kind).toBe("review");
+    await page.locator('[data-testid="sort-description"]').click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('[data-testid="duplicate-review-row"]')
+          ?.textContent?.includes("Alpha Row"),
+      { timeout: 5000 },
+    );
+    let rows = await page
+      .locator('[data-testid="duplicate-review-row"]')
+      .allTextContents();
+    expect(rows[0]).toContain("Alpha Row");
+
+    await page
+      .locator('[data-testid="duplicate-review-visibility"]')
+      .selectOption("duplicates");
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('[data-testid="duplicate-review-row"]')
+          .length === 1,
+      { timeout: 5000 },
+    );
+    rows = await page
+      .locator('[data-testid="duplicate-review-row"]')
+      .allTextContents();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain("Seed Match");
+
+    await page.locator('[data-testid="duplicate-review-row-3"]').check();
+    await page
+      .locator('[data-testid="duplicate-review-visibility"]')
+      .selectOption("nonDuplicates");
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('[data-testid="duplicate-review-row"]')
+          .length === 2,
+      { timeout: 5000 },
+    );
+    await page
+      .locator('[data-testid="duplicate-review-visibility"]')
+      .selectOption("all");
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('[data-testid="duplicate-review-row"]')
+          .length === 3,
+      { timeout: 5000 },
+    );
+    expect(
+      await page.locator('[data-testid="duplicate-review-row-3"]').isChecked(),
+    ).toBe(true);
   });
 
   it("uploads a JSON file and shows inserted count", async () => {
@@ -601,11 +694,13 @@ describe("Upload", () => {
 describe("Transactions", () => {
   let page: Page;
   let accountLabel: string;
+  let secondaryAccountLabel: string;
   let searchLabel: string;
 
   beforeEach(async () => {
     page = await browser.newPage();
     accountLabel = trackAccount(uniqueLabel("E2E Transactions"));
+    secondaryAccountLabel = trackAccount(uniqueLabel("0 E2E Transactions B"));
     searchLabel = `Whole Foods ${crypto.randomUUID().slice(0, 8)}`;
     await seedCsvRows([
       {
@@ -626,6 +721,12 @@ describe("Transactions", () => {
         amount: -18.99,
         account: accountLabel,
       },
+      {
+        date: "2025-08-03",
+        description: "Airport Shuttle",
+        amount: -12.34,
+        account: secondaryAccountLabel,
+      },
     ]);
     await page.goto(`${FRONTEND}/transactions`);
     await page.waitForSelector('[data-testid="transaction-row"]', {
@@ -642,28 +743,139 @@ describe("Transactions", () => {
     expect(count).toBeGreaterThan(0);
   });
 
+  it("defaults to oldest-first ordering", async () => {
+    const rows = await page
+      .locator('[data-testid="transaction-row"]')
+      .allTextContents();
+    expect(rows[0]).toContain("2025-08-01");
+    expect(rows[rows.length - 1]).toContain("2025-08-10");
+  });
+
+  it("sorts by amount, description, and account", async () => {
+    await page.locator('[data-testid="sort-amount"]').click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('[data-testid="transaction-row"]')
+          ?.textContent?.includes("-88.50"),
+      { timeout: 5000 },
+    );
+    let rows = await page
+      .locator('[data-testid="transaction-row"]')
+      .allTextContents();
+    expect(rows[0]).toContain("-88.50");
+
+    await page.locator('[data-testid="sort-description"]').click();
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('[data-testid="transaction-row"]')
+          ?.textContent?.includes("Airport Shuttle"),
+      { timeout: 5000 },
+    );
+    rows = await page
+      .locator('[data-testid="transaction-row"]')
+      .allTextContents();
+    expect(rows[0]).toContain("Airport Shuttle");
+
+    await page.locator('[data-testid="sort-account"]').click();
+    await page.waitForFunction(
+      (label) =>
+        document
+          .querySelector('[data-testid="transaction-row"]')
+          ?.textContent?.includes(label),
+      secondaryAccountLabel,
+      { timeout: 5000 },
+    );
+    rows = await page
+      .locator('[data-testid="transaction-row"]')
+      .allTextContents();
+    expect(rows[0]).toContain(secondaryAccountLabel);
+    expect(rows[rows.length - 1]).toContain(accountLabel);
+  });
+
   it("filters transactions by search query", async () => {
     await page.locator('[data-testid="search-input"]').fill(searchLabel);
-    await page.waitForTimeout(800);
-    const rowCount = await page
+    await page.waitForFunction(
+      (query) =>
+        Array.from(
+          document.querySelectorAll('[data-testid="transaction-row"]'),
+        ).every((row) => row.textContent?.includes(query)),
+      searchLabel,
+      { timeout: 5000 },
+    );
+    const rows = await page
       .locator('[data-testid="transaction-row"]')
-      .count();
-    const emptyVisible = await isVisible(page, '[data-testid="empty-state"]');
-    expect(rowCount > 0 || emptyVisible).toBe(true);
+      .allTextContents();
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row).toContain(searchLabel);
+    }
   });
 
   it("filters transactions by type=expense", async () => {
     await page.locator('[data-testid="filter-type"]').selectOption("expense");
-    await page.waitForTimeout(600);
-    const count = await page.locator('[data-testid="transaction-row"]').count();
-    expect(count).toBeGreaterThanOrEqual(0);
+    await page.waitForFunction(
+      () =>
+        Array.from(
+          document.querySelectorAll('[data-testid="transaction-row"]'),
+        ).every((row) => row.textContent?.includes("-")),
+      { timeout: 5000 },
+    );
+    const rows = await page
+      .locator('[data-testid="transaction-row"]')
+      .allTextContents();
+    expect(rows.length).toBeGreaterThan(0);
   });
 
   it("filters transactions by type=income", async () => {
     await page.locator('[data-testid="filter-type"]').selectOption("income");
-    await page.waitForTimeout(600);
-    const count = await page.locator('[data-testid="transaction-row"]').count();
-    expect(count).toBeGreaterThanOrEqual(0);
+    await page.waitForFunction(
+      () =>
+        Array.from(
+          document.querySelectorAll('[data-testid="transaction-row"]'),
+        ).every((row) => row.textContent?.includes("3000")),
+      { timeout: 5000 },
+    );
+    const rows = await page
+      .locator('[data-testid="transaction-row"]')
+      .allTextContents();
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  it("filters transactions by amount range and account", async () => {
+    await page.locator('[data-testid="filter-account"]').selectOption({
+      label: secondaryAccountLabel,
+    });
+    await page.locator('[data-testid="filter-amount-min"]').fill("-20");
+    await page.locator('[data-testid="filter-amount-max"]').fill("0");
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('[data-testid="transaction-row"]').length ===
+        1,
+      { timeout: 5000 },
+    );
+    const rows = await page
+      .locator('[data-testid="transaction-row"]')
+      .allTextContents();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain("Airport Shuttle");
+  });
+
+  it("updates URL params when sorting and resets page", async () => {
+    await page.goto(`${FRONTEND}/transactions?page=2`);
+    await page.waitForSelector('[data-testid="transaction-row"]', {
+      timeout: 10000,
+    });
+    await page.locator('[data-testid="sort-date"]').click();
+    await page.waitForFunction(
+      () => new URL(window.location.href).searchParams.get("order") === "desc",
+      { timeout: 5000 },
+    );
+    const url = new URL(page.url());
+    expect(url.searchParams.get("sort")).toBe("date");
+    expect(url.searchParams.get("order")).toBe("desc");
+    expect(url.searchParams.get("page")).toBe("1");
   });
 });
 

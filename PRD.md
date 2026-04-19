@@ -35,16 +35,28 @@ A web application that lets users upload financial transactions from bank accoun
 
 ### 2. Transaction Search & Filtering
 
-- Full-text search across transaction descriptions.
+- Substring search across transaction descriptions.
 - Filter by:
   - Date range (start / end).
   - Amount range (min / max).
   - Account label.
   - Tags / categories (include or exclude).
   - Transaction type: income (positive) or expense (negative).
-- Results are paginated and sortable by date, amount, or description.
+- Results default to ascending date order, oldest first.
+- Results are paginated and sortable by date, amount, description, or account label.
+- The transaction list keeps search, filter, sort, page, and page size in URL query parameters so refresh, back/forward navigation, and shared links preserve the current view.
+- Changing a filter or sort resets the list to page 1. Bulk selection applies only to rows on the currently loaded page.
 
-### 3. Data Deletion
+### 3. Duplicate Upload Review
+
+- Uploads that contain duplicate rows navigate to `/upload/duplicates` with a client-side review payload from the latest upload.
+- Duplicate review defaults to ascending date order, oldest first.
+- Users can switch review visibility between all uploaded rows, duplicates only, and non-duplicates only.
+- Review rows are paginated and sortable by date, amount, description, account label, or duplicate status.
+- Non-duplicate rows remain included by default. Duplicate-row accept/skip decisions persist while users filter, sort, and paginate the review table.
+- Duplicate review remains stateless on the backend; finalization sends only the rows selected for insertion.
+
+### 4. Data Deletion
 
 - Users can deleted uploaded transactions.
   - They can use the search and filtering
@@ -52,14 +64,14 @@ A web application that lets users upload financial transactions from bank accoun
   - Transactions can be deleted individually or in bulk by selecting
     multiple transactions and deleting them in one shot.
 
-### 4. Tagging & Categorization
+### 5. Tagging & Categorization
 
 - Users can apply one or more **string tags** to any transaction (e.g. `groceries`, `rent`, `salary`).
 - Bulk tagging: select multiple transactions from search results and apply/remove tags in one action.
 - Auto-tag rules: users can define rules like "description contains 'WHOLE FOODS' -> tag `groceries`" that are applied automatically on future uploads and can be run retroactively.
 - **Rule composition:** A single auto-tag rule can have multiple conditions combined with AND (all must match). Users achieve OR logic by creating separate rules that apply the same tag.
 
-### 5. Visualization & Analytics
+### 6. Visualization & Analytics
 
 All charts are filterable by date range, account, and tags.
 
