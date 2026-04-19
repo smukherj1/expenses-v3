@@ -1,16 +1,47 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
-import { uploadFile, type UploadResult } from "../api/uploads.ts";
+import { getAccounts } from "../api/accounts.ts";
+import {
+  uploadFile,
+  uploadFormats,
+  getUploadFormatLabel,
+  type UploadFormat,
+  type UploadResult,
+} from "../api/uploads.ts";
 import { saveUploadReviewSession } from "../lib/uploadReviewStore.ts";
 
 export default function UploadPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [format, setFormat] = useState<UploadFormat>("generic_csv");
+  const [accountMode, setAccountMode] = useState<"existing" | "custom">(
+    "existing",
+  );
+  const [selectedAccountLabel, setSelectedAccountLabel] = useState("");
+  const [customAccountLabel, setCustomAccountLabel] = useState("");
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<UploadResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: getAccounts,
+  });
+
+  const isInstitutionFormat = useMemo(
+    () => format !== "generic_csv" && format !== "generic_json",
+    [format],
+  );
+
+  const accountLabel =
+    accountMode === "custom" ? customAccountLabel : selectedAccountLabel;
+  const fileAccept = format === "generic_json" ? ".json" : ".csv";
+  const uploadDisabled =
+    uploading ||
+    !selectedFile ||
+    (isInstitutionFormat && accountLabel.trim().length === 0);
 
   function resetFileInput() {
     setSelectedFile(null);
@@ -24,7 +55,10 @@ export default function UploadPage() {
     setError(null);
 
     try {
-      const res = await uploadFile(selectedFile);
+      const res = await uploadFile(selectedFile, {
+        format,
+        accountLabel: isInstitutionFormat ? accountLabel.trim() : undefined,
+      });
       setResult(res);
       if (res.status === "completed") {
         resetFileInput();
@@ -62,6 +96,13 @@ export default function UploadPage() {
     }
   }
 
+  function onFormatChange(nextFormat: UploadFormat) {
+    setFormat(nextFormat);
+    setResult(null);
+    setError(null);
+    resetFileInput();
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">
@@ -72,21 +113,77 @@ export default function UploadPage() {
         <div className="bg-white rounded-xl border p-5 text-sm text-gray-600">
           <p className="font-semibold text-gray-800 mb-2">Supported formats</p>
           <p className="mb-2">
-            Dates must be{" "}
-            <code className="bg-gray-100 px-1 rounded">yyyy-mm-dd</code> and
-            currency must be{" "}
-            <code className="bg-gray-100 px-1 rounded">CAD</code>.
+            Select one explicit format before choosing a file.
           </p>
-          <p className="mb-2">
-            <strong>CSV</strong> — columns:{" "}
-            <code className="bg-gray-100 px-1 rounded">
-              date, description, amount, currency, account
-            </code>
-          </p>
-          <p className="mb-2">
-            <strong>JSON</strong> — array of objects with the same fields.
-          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-500">
+                Format
+              </span>
+              <select
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                value={format}
+                onChange={(e) => onFormatChange(e.target.value as UploadFormat)}
+                data-testid="upload-format-select"
+              >
+                {uploadFormats.map((option) => (
+                  <option key={option} value={option}>
+                    {getUploadFormatLabel(option)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-500">
+                File type
+              </span>
+              <div className="rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                {fileAccept}
+              </div>
+            </label>
+          </div>
         </div>
+
+        {isInstitutionFormat && (
+          <div className="bg-white rounded-xl border p-5 text-sm text-gray-600 space-y-3">
+            <p className="font-semibold text-gray-800">Account label</p>
+            <select
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              value={
+                accountMode === "existing" ? selectedAccountLabel : "__custom__"
+              }
+              onChange={(e) => {
+                if (e.target.value === "__custom__") {
+                  setAccountMode("custom");
+                } else {
+                  setAccountMode("existing");
+                  setSelectedAccountLabel(e.target.value);
+                }
+              }}
+              data-testid="upload-account-select"
+            >
+              <option value="" disabled>
+                Select an existing account
+              </option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.label}>
+                  {account.label}
+                </option>
+              ))}
+              <option value="__custom__">Custom label…</option>
+            </select>
+            {accountMode === "custom" && (
+              <input
+                type="text"
+                value={customAccountLabel}
+                onChange={(e) => setCustomAccountLabel(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="Enter a new account label"
+                data-testid="upload-account-label"
+              />
+            )}
+          </div>
+        )}
 
         <div
           onDragOver={(e) => {
@@ -106,7 +203,7 @@ export default function UploadPage() {
           <input
             ref={inputRef}
             type="file"
-            accept=".csv,.json"
+            accept={fileAccept}
             className="hidden"
             onChange={onInputChange}
             data-testid="upload-file-input"
@@ -125,7 +222,7 @@ export default function UploadPage() {
         {selectedFile && (
           <button
             onClick={handleUpload}
-            disabled={uploading}
+            disabled={uploadDisabled}
             className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
             data-testid="upload-submit"
           >
@@ -140,6 +237,9 @@ export default function UploadPage() {
           >
             <p className="font-semibold text-green-800 mb-1">
               Upload successful
+            </p>
+            <p className="text-green-700">
+              Format: {getUploadFormatLabel(result.format)}
             </p>
             <p className="text-green-700">
               Inserted: {result.summary.inserted}

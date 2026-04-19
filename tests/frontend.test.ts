@@ -15,10 +15,19 @@ import {
   beforeEach,
   afterAll,
 } from "bun:test";
+import { readFileSync } from "node:fs";
 import { chromium, type Browser, type Page } from "playwright";
 
 const FRONTEND = process.env.FRONTEND_URL ?? "http://localhost:8080";
 const API = `${process.env.BACKEND_URL ?? "http://localhost:3000"}/api`;
+
+type UploadFormat =
+  | "generic_csv"
+  | "generic_json"
+  | "td_canada"
+  | "rbc_canada"
+  | "amex_canada"
+  | "cibc_canada";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +66,10 @@ async function deleteTagByName(name: string) {
   if (tag) await apiReq("DELETE", `/tags/${tag.id}`);
 }
 
+function readFixture(name: string): string {
+  return readFileSync(new URL(`./data/${name}`, import.meta.url), "utf8");
+}
+
 function makeCsv(
   rows: Array<{
     date: string;
@@ -74,15 +87,46 @@ function makeCsv(
 
 async function uploadAndWaitForOutcome(
   page: Page,
-  fileContent: string,
-  filename: string,
-  mimeType: string,
+  options: {
+    fileContent: string;
+    filename: string;
+    mimeType: string;
+    format: UploadFormat;
+    accountLabel?: string;
+  },
 ): Promise<{ kind: "result" | "review" | "error"; text: string }> {
+  await page
+    .locator('[data-testid="upload-format-select"]')
+    .selectOption(options.format);
+  if (options.accountLabel) {
+    await page.waitForSelector('[data-testid="upload-account-select"]', {
+      timeout: 5000,
+    });
+    const accountSelect = page.locator('[data-testid="upload-account-select"]');
+    try {
+      await page.waitForFunction(
+        (label) =>
+          Array.from(
+            document.querySelectorAll(
+              '[data-testid="upload-account-select"] option',
+            ),
+          ).some((option) => option.textContent === label),
+        options.accountLabel,
+        { timeout: 2000 },
+      );
+      await accountSelect.selectOption({ label: options.accountLabel });
+    } catch {
+      await accountSelect.selectOption("__custom__");
+      await page
+        .locator('[data-testid="upload-account-label"]')
+        .fill(options.accountLabel);
+    }
+  }
   // Set files directly on the (hidden) input — bypasses file-chooser dialog
   await page.locator('[data-testid="upload-file-input"]').setInputFiles({
-    name: filename,
-    mimeType,
-    buffer: Buffer.from(fileContent),
+    name: options.filename,
+    mimeType: options.mimeType,
+    buffer: Buffer.from(options.fileContent),
   });
   // Wait for the submit button to appear (file is selected)
   await page.waitForSelector('[data-testid="upload-submit"]', {
@@ -140,10 +184,14 @@ afterAll(async () => {
   await browser.close();
 });
 
-// ── Upload — CSV ──────────────────────────────────────────────────────────────
+// ── Upload ───────────────────────────────────────────────────────────────────
 
-describe("Upload — CSV", () => {
-  const accountLabel = "E2E Upload CSV";
+describe("Upload", () => {
+  const csvAccountLabel = "E2E Upload CSV";
+  const jsonAccountLabel = "E2E Upload JSON";
+  const existingInstitutionLabel = "E2E Upload Existing";
+  const customInstitutionLabel = "E2E Upload Custom";
+  const reviewInstitutionLabel = "E2E Upload Review";
   let page: Page;
 
   beforeAll(async () => {
@@ -157,7 +205,15 @@ describe("Upload — CSV", () => {
 
   afterAll(async () => {
     await page.close();
-    await deleteAccountByLabel(accountLabel);
+    for (const label of [
+      csvAccountLabel,
+      jsonAccountLabel,
+      existingInstitutionLabel,
+      customInstitutionLabel,
+      reviewInstitutionLabel,
+    ]) {
+      await deleteAccountByLabel(label);
+    }
   });
 
   it("shows the Upload page heading", async () => {
@@ -171,21 +227,21 @@ describe("Upload — CSV", () => {
         date: "2025-06-01",
         description: "Supermarket",
         amount: -45.0,
-        account: accountLabel,
+        account: csvAccountLabel,
       },
       {
         date: "2025-06-02",
         description: "Salary",
         amount: 2500.0,
-        account: accountLabel,
+        account: csvAccountLabel,
       },
     ]);
-    const outcome = await uploadAndWaitForOutcome(
-      page,
-      csv,
-      "e2e-test.csv",
-      "text/csv",
-    );
+    const outcome = await uploadAndWaitForOutcome(page, {
+      fileContent: csv,
+      filename: "e2e-test.csv",
+      mimeType: "text/csv",
+      format: "generic_csv",
+    });
     expect(outcome.kind).toBe("result");
     expect(outcome.text).toContain("Inserted: 2");
     expect(outcome.text).toContain("Duplicates: 0");
@@ -197,23 +253,24 @@ describe("Upload — CSV", () => {
         date: "2025-06-01",
         description: "Supermarket",
         amount: -45.0,
-        account: accountLabel,
+        account: csvAccountLabel,
       },
       {
         date: "2025-06-03",
         description: "Coffee",
         amount: -5.5,
-        account: accountLabel,
+        account: csvAccountLabel,
       },
     ]);
-    const outcome = await uploadAndWaitForOutcome(
-      page,
-      csv,
-      "e2e-test2.csv",
-      "text/csv",
-    );
+    const outcome = await uploadAndWaitForOutcome(page, {
+      fileContent: csv,
+      filename: "e2e-test2.csv",
+      mimeType: "text/csv",
+      format: "generic_csv",
+    });
     expect(outcome.kind).toBe("review");
     expect(outcome.text).toContain("Duplicate Review");
+    expect(outcome.text).toContain("generic_csv");
     expect(page.url()).toContain("/upload/duplicates");
     await page.locator('[data-testid="duplicate-review-skip-all"]').click();
     await page.locator('[data-testid="duplicate-review-finalize"]').click();
@@ -234,21 +291,21 @@ describe("Upload — CSV", () => {
         date: "2025-06-01",
         description: "Supermarket",
         amount: -45.0,
-        account: accountLabel,
+        account: csvAccountLabel,
       },
       {
         date: "2025-06-04",
         description: "Book Store",
         amount: -24.0,
-        account: accountLabel,
+        account: csvAccountLabel,
       },
     ]);
-    const outcome = await uploadAndWaitForOutcome(
-      page,
-      csv,
-      "e2e-test3.csv",
-      "text/csv",
-    );
+    const outcome = await uploadAndWaitForOutcome(page, {
+      fileContent: csv,
+      filename: "e2e-test3.csv",
+      mimeType: "text/csv",
+      format: "generic_csv",
+    });
     expect(outcome.kind).toBe("review");
     await page.locator('[data-testid="duplicate-review-accept-all"]').click();
     await page.locator('[data-testid="duplicate-review-finalize"]').click();
@@ -269,18 +326,18 @@ describe("Upload — CSV", () => {
       description:
         index === 20 ? "Supermarket" : `Review Row ${String(index + 1)}`,
       amount: index === 20 ? -45.0 : -(index + 1),
-      account: accountLabel,
+      account: csvAccountLabel,
     })).map((row, index) =>
       index === 20 ? { ...row, date: "2025-06-01" } : row,
     );
     const csv = makeCsv(rows);
 
-    const outcome = await uploadAndWaitForOutcome(
-      page,
-      csv,
-      "e2e-review-pages.csv",
-      "text/csv",
-    );
+    const outcome = await uploadAndWaitForOutcome(page, {
+      fileContent: csv,
+      filename: "e2e-review-pages.csv",
+      mimeType: "text/csv",
+      format: "generic_csv",
+    });
 
     expect(outcome.kind).toBe("review");
     expect(
@@ -305,24 +362,6 @@ describe("Upload — CSV", () => {
     expect(resultText).toContain("Inserted: 24");
     expect(resultText).toContain("Duplicates: 1");
   });
-});
-
-// ── Upload — JSON ─────────────────────────────────────────────────────────────
-
-describe("Upload — JSON", () => {
-  const accountLabel = "E2E Upload JSON";
-  let page: Page;
-
-  beforeAll(async () => {
-    page = await browser.newPage();
-    await page.goto(`${FRONTEND}/upload`);
-    await page.waitForLoadState("networkidle");
-  });
-
-  afterAll(async () => {
-    await page.close();
-    await deleteAccountByLabel(accountLabel);
-  });
 
   it("uploads a JSON file and shows inserted count", async () => {
     const json = JSON.stringify([
@@ -331,24 +370,118 @@ describe("Upload — JSON", () => {
         description: "Freelance Income",
         amount: "1200.0",
         currency: "CAD",
-        account: accountLabel,
+        account: jsonAccountLabel,
       },
       {
         date: "2025-07-05",
         description: "Rent",
         amount: "-1000.0",
         currency: "CAD",
-        account: accountLabel,
+        account: jsonAccountLabel,
       },
     ]);
-    const outcome = await uploadAndWaitForOutcome(
-      page,
-      json,
-      "e2e-test.json",
-      "application/json",
-    );
+    const outcome = await uploadAndWaitForOutcome(page, {
+      fileContent: json,
+      filename: "e2e-test.json",
+      mimeType: "application/json",
+      format: "generic_json",
+    });
     expect(outcome.kind).toBe("result");
     expect(outcome.text).toContain("Inserted: 2");
+  });
+
+  it("uploads TD Canada with an existing account label", async () => {
+    await uploadAndWaitForOutcome(page, {
+      fileContent: makeCsv([
+        {
+          date: "2025-05-01",
+          description: "Seed Existing Account",
+          amount: -1.0,
+          account: existingInstitutionLabel,
+        },
+      ]),
+      filename: "existing-account-seed.csv",
+      mimeType: "text/csv",
+      format: "generic_csv",
+    });
+
+    const outcome = await uploadAndWaitForOutcome(page, {
+      fileContent: readFixture("td.csv"),
+      filename: "td.csv",
+      mimeType: "text/csv",
+      format: "td_canada",
+      accountLabel: existingInstitutionLabel,
+    });
+    expect(outcome.kind).toBe("result");
+    expect(outcome.text).toContain("Inserted: 6");
+  });
+
+  it("disables submit until an institution account label is provided", async () => {
+    await page
+      .locator('[data-testid="upload-format-select"]')
+      .selectOption("td_canada");
+    await page.locator('[data-testid="upload-file-input"]').setInputFiles({
+      name: "td.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from(readFixture("td.csv")),
+    });
+    await page.waitForSelector('[data-testid="upload-submit"]', {
+      timeout: 5000,
+    });
+    expect(
+      await page.locator('[data-testid="upload-submit"]').isDisabled(),
+    ).toBe(true);
+  });
+
+  it("uploads Amex Canada with a custom account label and creates the account", async () => {
+    const outcome = await uploadAndWaitForOutcome(page, {
+      fileContent: readFixture("amex.csv"),
+      filename: "amex.csv",
+      mimeType: "text/csv",
+      format: "amex_canada",
+      accountLabel: customInstitutionLabel,
+    });
+    expect(outcome.kind).toBe("result");
+    expect(outcome.text).toContain("Inserted: 7");
+
+    const accounts = await apiJson<Array<{ label: string }>>(
+      "GET",
+      "/accounts",
+    );
+    expect(accounts.map((account) => account.label)).toContain(
+      customInstitutionLabel,
+    );
+  });
+
+  it("uploads an institution fixture through duplicate review", async () => {
+    const seed = await uploadAndWaitForOutcome(page, {
+      fileContent: readFixture("rbc.csv"),
+      filename: "rbc-seed.csv",
+      mimeType: "text/csv",
+      format: "rbc_canada",
+      accountLabel: reviewInstitutionLabel,
+    });
+    expect(seed.kind).toBe("result");
+
+    const outcome = await uploadAndWaitForOutcome(page, {
+      fileContent: readFixture("rbc.csv"),
+      filename: "rbc-review.csv",
+      mimeType: "text/csv",
+      format: "rbc_canada",
+      accountLabel: reviewInstitutionLabel,
+    });
+    expect(outcome.kind).toBe("review");
+    expect(outcome.text).toContain("rbc_canada");
+    await page.locator('[data-testid="duplicate-review-accept-all"]').click();
+    await page.locator('[data-testid="duplicate-review-finalize"]').click();
+    await page.waitForSelector('[data-testid="duplicate-review-summary"]', {
+      timeout: 15000,
+    });
+    const resultText =
+      (await page
+        .locator('[data-testid="duplicate-review-summary"]')
+        .textContent()) ?? "";
+    expect(resultText).toContain("Inserted: 9");
   });
 });
 
@@ -381,6 +514,7 @@ describe("Transactions", () => {
     ]);
     const form = new FormData();
     form.append("file", new Blob([csv], { type: "text/csv" }), "seed.csv");
+    form.append("format", "generic_csv");
     await fetch(`${API}/uploads`, { method: "POST", body: form });
 
     page = await browser.newPage();
@@ -452,6 +586,7 @@ describe("Tagging — detail page", () => {
     ]);
     const form = new FormData();
     form.append("file", new Blob([csv], { type: "text/csv" }), "tag-seed.csv");
+    form.append("format", "generic_csv");
     await fetch(`${API}/uploads`, { method: "POST", body: form });
 
     // Find by matching description via full list (search may be FTS-only)
@@ -543,6 +678,7 @@ describe("Tagging — bulk", () => {
     ]);
     const form = new FormData();
     form.append("file", new Blob([csv], { type: "text/csv" }), "bulk-seed.csv");
+    form.append("format", "generic_csv");
     await fetch(`${API}/uploads`, { method: "POST", body: form });
 
     page = await browser.newPage();
@@ -645,10 +781,12 @@ describe("Deletion — list page", () => {
       new Blob([singleCsv], { type: "text/csv" }),
       "single.csv",
     );
+    form1.append("format", "generic_csv");
     await fetch(`${API}/uploads`, { method: "POST", body: form1 });
 
     const form2 = new FormData();
     form2.append("file", new Blob([bulkCsv], { type: "text/csv" }), "bulk.csv");
+    form2.append("format", "generic_csv");
     await fetch(`${API}/uploads`, { method: "POST", body: form2 });
 
     page = await browser.newPage();
@@ -764,6 +902,7 @@ describe("Auto-tag rules", () => {
       new Blob([csv], { type: "text/csv" }),
       "rules-seed.csv",
     );
+    form.append("format", "generic_csv");
     await fetch(`${API}/uploads`, { method: "POST", body: form });
 
     const tag = await apiJson<{ id: string }>("POST", "/tags", {
@@ -862,6 +1001,7 @@ describe("Settings", () => {
       new Blob([csv], { type: "text/csv" }),
       "settings-seed.csv",
     );
+    form.append("format", "generic_csv");
     await fetch(`${API}/uploads`, { method: "POST", body: form });
 
     page = await browser.newPage();

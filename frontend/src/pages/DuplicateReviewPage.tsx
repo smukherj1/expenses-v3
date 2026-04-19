@@ -179,8 +179,8 @@ export default function DuplicateReviewPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Duplicate Review</h1>
           <p className="text-sm text-gray-600 mt-1">
-            {session.sourceFileName} · {rows.length} rows · {duplicateCount}{" "}
-            duplicates
+            {session.sourceFileName} · {session.result.format} · {rows.length}{" "}
+            rows · {duplicateCount} duplicates
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

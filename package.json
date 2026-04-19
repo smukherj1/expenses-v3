@@ -7,6 +7,7 @@
     "test:backend": "bun test tests/backend.test.ts",
     "test:frontend": "bun test --timeout 30000 tests/frontend.test.ts",
     "typecheck": "tsc --noEmit",
+    "typecheck:all": "bun run typecheck && bun run --cwd frontend typecheck && bun run --cwd backend typecheck",
     "format": "prettier --write .",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

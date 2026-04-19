@@ -6,8 +6,8 @@ import {
   ValidationError,
 } from "../middleware/errorHandler.js";
 import { ParsedTransaction } from "../parsers/schema.js";
-import { parseCsv } from "../parsers/csv.js";
-import { parseJson } from "../parsers/json.js";
+import { parseUploadFile } from "../parsers/index.js";
+import type { UploadFormat } from "../parsers/types.js";
 import { applyAllRulesToTransactions } from "./ruleService.js";
 
 // Transaction with fields like account ID resolved from the db.
@@ -34,19 +34,34 @@ interface FinalizeUploadRow {
   allowDuplicate?: boolean;
 }
 
-function parseUploadContent(filename: string, content: string) {
+function expectedExtension(format: UploadFormat): "csv" | "json" {
+  return format === "generic_json" ? "json" : "csv";
+}
+
+function validateUploadFile(filename: string, format: UploadFormat) {
   const ext = filename.split(".").pop()?.toLowerCase();
-  try {
-    if (ext === "json") {
-      return parseJson(content);
-    }
-    return parseCsv(content);
-  } catch (err) {
-    if (err instanceof SyntaxError || err instanceof Error) {
-      throw new ValidationError(err.message);
-    }
-    throw err;
+  const expected = expectedExtension(format);
+
+  if (!ext || ext !== expected) {
+    throw new ValidationError(
+      `Selected format ${format} requires a .${expected} file`,
+    );
   }
+}
+
+function normalizeAccountLabel(
+  format: UploadFormat,
+  accountLabel?: string,
+): string | undefined {
+  if (format === "generic_csv" || format === "generic_json") {
+    return undefined;
+  }
+
+  const trimmed = accountLabel?.trim() ?? "";
+  if (!trimmed) {
+    throw new ValidationError("Institution uploads require accountLabel");
+  }
+  return trimmed;
 }
 
 function normalizeAmount(a: string | number): string {
@@ -207,8 +222,13 @@ export async function classifyUpload(
   userId: string,
   filename: string,
   content: string,
+  options: { format: UploadFormat; accountLabel?: string },
 ) {
-  const parsed = parseUploadContent(filename, content);
+  validateUploadFile(filename, options.format);
+  const parsed = parseUploadFile(content, {
+    format: options.format,
+    accountLabel: normalizeAccountLabel(options.format, options.accountLabel),
+  });
 
   const { transactions: parsedRows, errors: parseErrors } = parsed;
 
@@ -224,6 +244,7 @@ export async function classifyUpload(
   if (parsedRows.length === 0) {
     return {
       status: "completed" as const,
+      format: options.format,
       summary: {
         inserted: 0,
         duplicates: 0,
@@ -237,6 +258,7 @@ export async function classifyUpload(
   if (duplicates > 0) {
     return {
       status: "needs_review" as const,
+      format: options.format,
       summary: {
         inserted: 0,
         duplicates,
@@ -250,6 +272,7 @@ export async function classifyUpload(
 
   return {
     status: "completed" as const,
+    format: options.format,
     summary: {
       inserted: resolvedTxns.length,
       duplicates: 0,

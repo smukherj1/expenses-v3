@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { readFileSync } from "node:fs";
 
 const BASE_URL = process.env.BACKEND_URL ?? "http://localhost:3000";
 const API = `${BASE_URL}/api`;
@@ -37,6 +38,18 @@ type CsvRow = {
   account: string;
 };
 
+type UploadFormat =
+  | "generic_csv"
+  | "generic_json"
+  | "td_canada"
+  | "rbc_canada"
+  | "amex_canada"
+  | "cibc_canada";
+
+function readFixture(name: string): string {
+  return readFileSync(new URL(`./data/${name}`, import.meta.url), "utf8");
+}
+
 /** Build a minimal well-formed CSV for upload tests. Dates must be yyyy-mm-dd. */
 function makeCsv(rows: CsvRow[]) {
   const header = "date,description,amount,currency,account";
@@ -49,6 +62,7 @@ function makeCsv(rows: CsvRow[]) {
 async function uploadCsv(
   rows: CsvRow[],
   filename = "test.csv",
+  options: { format?: UploadFormat; accountLabel?: string } = {},
 ): Promise<Response> {
   const form = new FormData();
   form.append(
@@ -56,15 +70,42 @@ async function uploadCsv(
     new Blob([makeCsv(rows)], { type: "text/csv" }),
     filename,
   );
+  form.append("format", options.format ?? "generic_csv");
+  if (options.accountLabel) {
+    form.append("accountLabel", options.accountLabel);
+  }
   return fetch(`${API}/uploads`, { method: "POST", body: form });
 }
 
 async function uploadCsvOk(
   rows: CsvRow[],
   filename = "test.csv",
+  options: { format?: UploadFormat; accountLabel?: string } = {},
 ): Promise<unknown> {
-  const res = await uploadCsv(rows, filename);
+  const res = await uploadCsv(rows, filename, options);
   return res.json();
+}
+
+async function uploadRaw(
+  content: string,
+  filename: string,
+  format: UploadFormat,
+  accountLabel?: string,
+  mimeType = filename.endsWith(".json") ? "application/json" : "text/csv",
+): Promise<Response> {
+  const form = new FormData();
+  form.append("file", new Blob([content], { type: mimeType }), filename);
+  form.append("format", format);
+  if (accountLabel) form.append("accountLabel", accountLabel);
+  return fetch(`${API}/uploads`, { method: "POST", body: form });
+}
+
+async function uploadFixture(
+  filename: string,
+  format: UploadFormat,
+  accountLabel: string,
+): Promise<Response> {
+  return uploadRaw(readFixture(filename), filename, format, accountLabel);
 }
 
 async function finalizeUpload(
@@ -133,10 +174,12 @@ describe("Accounts", () => {
     ]);
     const data = (await res.json()) as {
       status: string;
+      format: UploadFormat;
       summary: { inserted: number; duplicates: number };
     };
     expect(res.status).toBe(201);
     expect(data.status).toBe("completed");
+    expect(data.format).toBe("generic_csv");
     expect(data.summary.inserted).toBe(1);
   });
 
@@ -174,6 +217,10 @@ describe("Uploads", () => {
   const visaLabel = "Uploads Test — Visa";
   const savingsLabel = "Uploads Test — Savings";
   const someAccountLabel = "Some Account";
+  const tdLabel = "Uploads Test — TD";
+  const rbcLabel = "Uploads Test — RBC";
+  const amexLabel = "Uploads Test — Amex";
+  const cibcLabel = "Uploads Test — CIBC";
 
   afterAll(async () => {
     for (const label of [
@@ -181,6 +228,10 @@ describe("Uploads", () => {
       visaLabel,
       savingsLabel,
       someAccountLabel,
+      tdLabel,
+      rbcLabel,
+      amexLabel,
+      cibcLabel,
     ]) {
       await deleteAccountByLabel(label);
     }
@@ -196,11 +247,13 @@ describe("Uploads", () => {
     const res = await uploadCsv([{ ...txn }, { ...txn }], "airlines.csv");
     const data = (await res.json()) as {
       status: string;
+      format: UploadFormat;
       summary: { inserted: number; duplicates: number };
     };
 
     expect(res.status).toBe(201);
     expect(data.status).toBe("completed");
+    expect(data.format).toBe("generic_csv");
     expect(data.summary.inserted).toBe(2);
     expect(data.summary.duplicates).toBe(0);
   });
@@ -268,11 +321,13 @@ describe("Uploads", () => {
     );
     const data = (await res.json()) as {
       status: string;
+      format: UploadFormat;
       summary: { inserted: number; duplicates: number };
       transactions: Array<{ duplicate: boolean }>;
     };
     expect(res.status).toBe(200);
     expect(data.status).toBe("needs_review");
+    expect(data.format).toBe("generic_csv");
     expect(data.summary.inserted).toBe(0);
     expect(data.summary.duplicates).toBe(1);
     expect(data.transactions.map((row) => row.duplicate)).toEqual([
@@ -349,9 +404,11 @@ describe("Uploads", () => {
     );
     const data = (await res.json()) as {
       status: string;
+      format: UploadFormat;
       summary: { inserted: number; duplicates: number };
     };
     expect(data.status).toBe("completed");
+    expect(data.format).toBe("generic_csv");
     expect(data.summary.inserted).toBe(2);
 
     // Exactly 3 test accounts — no duplicate account created for chequingLabel
@@ -369,6 +426,7 @@ describe("Uploads", () => {
     const csv = `date,description,amount,currency,account\n2025-03-01,Something,-10.00,USD,${someAccountLabel}`;
     const form = new FormData();
     form.append("file", new Blob([csv], { type: "text/csv" }), "usd.csv");
+    form.append("format", "generic_csv");
     const res = await fetch(`${API}/uploads`, { method: "POST", body: form });
     const data = (await res.json()) as { error: { code: string } };
     expect(res.status).toBe(422);
@@ -408,6 +466,7 @@ describe("Uploads", () => {
       new Blob([jsonBody], { type: "application/json" }),
       "bad-date.json",
     );
+    form.append("format", "generic_json");
     const res = await fetch(`${API}/uploads`, { method: "POST", body: form });
     const data = (await res.json()) as { error: { code: string } };
     expect(res.status).toBe(400);
@@ -430,14 +489,134 @@ describe("Uploads", () => {
       new Blob([jsonBody], { type: "application/json" }),
       "upload.json",
     );
+    form.append("format", "generic_json");
     const res = await fetch(`${API}/uploads`, { method: "POST", body: form });
     const data = (await res.json()) as {
       status: string;
+      format: UploadFormat;
       summary: { inserted: number; duplicates: number };
     };
     expect(res.status).toBe(201);
     expect(data.status).toBe("completed");
+    expect(data.format).toBe("generic_json");
     expect(data.summary.inserted).toBe(1);
+  });
+
+  it("POST /api/uploads — uploads TD Canada fixture", async () => {
+    const res = await uploadFixture("td.csv", "td_canada", tdLabel);
+    const data = (await res.json()) as {
+      status: string;
+      format: UploadFormat;
+      summary: { inserted: number; duplicates: number };
+    };
+    expect(res.status).toBe(201);
+    expect(data.status).toBe("completed");
+    expect(data.format).toBe("td_canada");
+    expect(data.summary.inserted).toBe(6);
+    expect(data.summary.duplicates).toBe(0);
+  });
+
+  it("POST /api/uploads — uploads RBC Canada fixture", async () => {
+    const res = await uploadFixture("rbc.csv", "rbc_canada", rbcLabel);
+    const data = (await res.json()) as {
+      status: string;
+      format: UploadFormat;
+      summary: { inserted: number; duplicates: number };
+    };
+    expect(res.status).toBe(201);
+    expect(data.status).toBe("completed");
+    expect(data.format).toBe("rbc_canada");
+    expect(data.summary.inserted).toBe(9);
+    expect(data.summary.duplicates).toBe(0);
+  });
+
+  it("POST /api/uploads — uploads Amex Canada fixture", async () => {
+    const res = await uploadFixture("amex.csv", "amex_canada", amexLabel);
+    const data = (await res.json()) as {
+      status: string;
+      format: UploadFormat;
+      summary: { inserted: number; duplicates: number };
+    };
+    expect(res.status).toBe(201);
+    expect(data.status).toBe("completed");
+    expect(data.format).toBe("amex_canada");
+    expect(data.summary.inserted).toBe(7);
+    expect(data.summary.duplicates).toBe(0);
+  });
+
+  it("POST /api/uploads — uploads CIBC fixture", async () => {
+    const res = await uploadFixture("cibc.csv", "cibc_canada", cibcLabel);
+    const data = (await res.json()) as {
+      status: string;
+      format: UploadFormat;
+      summary: { inserted: number; duplicates: number };
+    };
+    expect(res.status).toBe(201);
+    expect(data.status).toBe("completed");
+    expect(data.format).toBe("cibc_canada");
+    expect(data.summary.inserted).toBe(8);
+    expect(data.summary.duplicates).toBe(0);
+  });
+
+  it("POST /api/uploads — rejects missing accountLabel for institution formats", async () => {
+    const res = await uploadRaw(readFixture("td.csv"), "td.csv", "td_canada");
+    const data = (await res.json()) as { error: { code: string } };
+    expect(res.status).toBe(400);
+    expect(data.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("POST /api/uploads — rejects missing format", async () => {
+    const form = new FormData();
+    form.append(
+      "file",
+      new Blob([readFixture("td.csv")], { type: "text/csv" }),
+      "td.csv",
+    );
+    const res = await fetch(`${API}/uploads`, { method: "POST", body: form });
+    const data = (await res.json()) as { error: { code: string } };
+    expect(res.status).toBe(400);
+    expect(data.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("POST /api/uploads — rejects wrong file extension for selected format", async () => {
+    const res = await uploadRaw(
+      readFixture("generic.json"),
+      "wrong.json",
+      "generic_csv",
+    );
+    const data = (await res.json()) as { error: { code: string } };
+    expect(res.status).toBe(400);
+    expect(data.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("POST /api/uploads — duplicate review response includes format", async () => {
+    const res = await uploadCsv(
+      [
+        {
+          date: "2025-03-01",
+          description: "Grocery Store",
+          amount: "-82.5",
+          account: chequingLabel,
+        },
+        {
+          date: "2025-03-15",
+          description: "Internet Bill",
+          amount: "-59.99",
+          account: chequingLabel,
+        },
+      ],
+      "march3.csv",
+    );
+    const data = (await res.json()) as {
+      status: string;
+      format: UploadFormat;
+      summary: { inserted: number; duplicates: number };
+      transactions: Array<{ duplicate: boolean }>;
+    };
+    expect(res.status).toBe(200);
+    expect(data.status).toBe("needs_review");
+    expect(data.format).toBe("generic_csv");
+    expect(data.summary.duplicates).toBe(2);
   });
 });
 
