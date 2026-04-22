@@ -13,7 +13,7 @@
   "dependencies": {
     "@hono/zod-validator": "^0.7.6",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.7.5",
+    "hono": "^4.12.14",
     "papaparse": "^5.4.1",
     "pg": "^8.20.0",
     "zod": "^4.3.6"
@@ -23,9 +23,9 @@
     "@types/papaparse": "^5.3.14",
     "@types/pg": "^8.20.0",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^10.2.0",
+    "eslint": "^10.2.1",
     "eslint-plugin-unused-imports": "^4.4.1",
-    "typescript": "^6.0.2",
-    "typescript-eslint": "^8.58.2"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.0"
   }
 }
