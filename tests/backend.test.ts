@@ -791,6 +791,7 @@ describe("Transactions", () => {
   });
 
   it("GET /api/transactions — sorts by amount, description, and account", async () => {
+    const sortToken = `Sort Account ${crypto.randomUUID().slice(0, 8)}`;
     const accountLabelLow = trackAccount(
       uniqueLabel("0 Transactions Sort Low"),
     );
@@ -800,13 +801,13 @@ describe("Transactions", () => {
     await seedCsvRows([
       {
         date: "2025-03-02",
-        description: "Low Sort Store",
+        description: `${sortToken} Low Store`,
         amount: "-10.0",
         account: accountLabelLow,
       },
       {
         date: "2025-03-03",
-        description: "High Sort Store",
+        description: `${sortToken} High Store`,
         amount: "-11.0",
         account: accountLabelHigh,
       },
@@ -842,13 +843,13 @@ describe("Transactions", () => {
 
     const combinedAccounts = await json<{
       data: Array<{ accountLabel: string }>;
-    }>("GET", `/transactions?sort=account&order=asc&limit=10`);
+    }>(
+      "GET",
+      `/transactions?q=${encodeURIComponent(sortToken)}&sort=account&order=asc&limit=10`,
+    );
     expect(combinedAccounts.status).toBe(200);
     expect(combinedAccounts.data.data.map((row) => row.accountLabel)).toEqual([
       accountLabelLow,
-      accountLabel,
-      accountLabel,
-      accountLabel,
       accountLabelHigh,
     ]);
     expect(combinedAccounts.data.data[0]!.accountLabel).toBe(accountLabelLow);

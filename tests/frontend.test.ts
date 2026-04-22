@@ -254,6 +254,47 @@ async function isVisible(page: Page, selector: string): Promise<boolean> {
   }
 }
 
+async function selectTransactionAccountFilter(page: Page, label: string) {
+  await page.waitForFunction(
+    (accountLabel) =>
+      Array.from(
+        document.querySelectorAll('[data-testid="filter-account"] option'),
+      ).some((option) => option.textContent === accountLabel),
+    label,
+    { timeout: 5000 },
+  );
+  await page.locator('[data-testid="filter-account"]').selectOption({ label });
+  await page.waitForFunction(
+    (accountLabel) => {
+      const rows = Array.from(
+        document.querySelectorAll('[data-testid="transaction-row"]'),
+      );
+      return (
+        rows.length > 0 &&
+        rows.every((row) => row.textContent?.includes(accountLabel))
+      );
+    },
+    label,
+    { timeout: 5000 },
+  );
+}
+
+async function searchTransactions(page: Page, query: string) {
+  await page.locator('[data-testid="search-input"]').fill(query);
+  await page.waitForFunction(
+    (value) => {
+      const rows = Array.from(
+        document.querySelectorAll('[data-testid="transaction-row"]'),
+      );
+      return (
+        rows.length > 0 && rows.every((row) => row.textContent?.includes(value))
+      );
+    },
+    query,
+    { timeout: 5000 },
+  );
+}
+
 // ── global browser setup ──────────────────────────────────────────────────────
 
 let browser: Browser;
@@ -711,7 +752,7 @@ describe("Transactions", () => {
       },
       {
         date: "2025-08-05",
-        description: "Payroll August",
+        description: `Payroll August ${searchLabel}`,
         amount: 3000.0,
         account: accountLabel,
       },
@@ -723,7 +764,7 @@ describe("Transactions", () => {
       },
       {
         date: "2025-08-03",
-        description: "Airport Shuttle",
+        description: `Airport Shuttle ${searchLabel}`,
         amount: -12.34,
         account: secondaryAccountLabel,
       },
@@ -739,11 +780,13 @@ describe("Transactions", () => {
   });
 
   it("shows transaction rows", async () => {
+    await selectTransactionAccountFilter(page, accountLabel);
     const count = await page.locator('[data-testid="transaction-row"]').count();
     expect(count).toBeGreaterThan(0);
   });
 
   it("defaults to oldest-first ordering", async () => {
+    await selectTransactionAccountFilter(page, accountLabel);
     const rows = await page
       .locator('[data-testid="transaction-row"]')
       .allTextContents();
@@ -752,6 +795,7 @@ describe("Transactions", () => {
   });
 
   it("sorts by amount, description, and account", async () => {
+    await searchTransactions(page, searchLabel);
     await page.locator('[data-testid="sort-amount"]').click();
     await page.waitForFunction(
       () =>
@@ -795,15 +839,7 @@ describe("Transactions", () => {
   });
 
   it("filters transactions by search query", async () => {
-    await page.locator('[data-testid="search-input"]').fill(searchLabel);
-    await page.waitForFunction(
-      (query) =>
-        Array.from(
-          document.querySelectorAll('[data-testid="transaction-row"]'),
-        ).every((row) => row.textContent?.includes(query)),
-      searchLabel,
-      { timeout: 5000 },
-    );
+    await searchTransactions(page, searchLabel);
     const rows = await page
       .locator('[data-testid="transaction-row"]')
       .allTextContents();
@@ -814,6 +850,7 @@ describe("Transactions", () => {
   });
 
   it("filters transactions by type=expense", async () => {
+    await selectTransactionAccountFilter(page, accountLabel);
     await page.locator('[data-testid="filter-type"]').selectOption("expense");
     await page.waitForFunction(
       () =>
@@ -829,6 +866,7 @@ describe("Transactions", () => {
   });
 
   it("filters transactions by type=income", async () => {
+    await selectTransactionAccountFilter(page, accountLabel);
     await page.locator('[data-testid="filter-type"]').selectOption("income");
     await page.waitForFunction(
       () =>
@@ -844,9 +882,7 @@ describe("Transactions", () => {
   });
 
   it("filters transactions by amount range and account", async () => {
-    await page.locator('[data-testid="filter-account"]').selectOption({
-      label: secondaryAccountLabel,
-    });
+    await selectTransactionAccountFilter(page, secondaryAccountLabel);
     await page.locator('[data-testid="filter-amount-min"]').fill("-20");
     await page.locator('[data-testid="filter-amount-max"]').fill("0");
     await page.waitForFunction(
@@ -1010,6 +1046,7 @@ describe("Tagging — bulk", () => {
     await page.waitForSelector('[data-testid="transaction-row"]', {
       timeout: 10000,
     });
+    await selectTransactionAccountFilter(page, accountLabel);
   });
 
   afterEach(async () => {
@@ -1104,6 +1141,7 @@ describe("Deletion — list page", () => {
     await page.waitForSelector('[data-testid="transaction-row"]', {
       timeout: 10000,
     });
+    await selectTransactionAccountFilter(page, singleAccount);
 
     await page
       .locator('[data-testid="search-input"]')
@@ -1159,6 +1197,7 @@ describe("Deletion — list page", () => {
     await page.waitForSelector('[data-testid="transaction-row"]', {
       timeout: 10000,
     });
+    await selectTransactionAccountFilter(page, bulkAccount);
 
     await page
       .locator('[data-testid="search-input"]')

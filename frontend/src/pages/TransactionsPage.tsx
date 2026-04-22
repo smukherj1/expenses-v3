@@ -10,6 +10,7 @@ import {
   listTransactions,
   bulkTag,
   bulkDeleteTransactions,
+  type Transaction,
   type ListParams,
 } from "../api/transactions.ts";
 import { getAccounts } from "../api/accounts.ts";
@@ -28,55 +29,307 @@ type TransactionSortColumn = Exclude<
   TransactionListSort["column"],
   "duplicateStatus"
 >;
+type SearchParamUpdateOptions = { resetPage?: boolean; replace?: boolean };
+type TransactionSearchState = {
+  q: string;
+  dateFrom: string;
+  dateTo: string;
+  amountMin: string;
+  amountMax: string;
+  accountId: string;
+  type: ListParams["type"] | "";
+  tags: string;
+  sort: TransactionSortColumn;
+  order: TransactionListSort["order"];
+  page: number;
+};
+type BulkTagAction = "add" | "remove";
 
+const TRANSACTION_COLUMNS: TransactionListColumn[] = [
+  "select",
+  "date",
+  "description",
+  "amount",
+  "account",
+  "tags",
+];
+const TRANSACTION_SORTABLE_COLUMNS: TransactionSortColumn[] = [
+  "date",
+  "description",
+  "amount",
+  "account",
+];
+
+/**
+ * Parses an amount filter input into the API's numeric representation.
+ *
+ * @param value Raw text from a min/max amount input.
+ * @returns undefined for blank or invalid text so the API filter is omitted,
+ * otherwise the parsed finite number.
+ */
 function normalizeAmount(value: string): number | undefined {
   if (value.trim() === "") return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+/**
+ * Reads the transaction list's URL-backed filter, sort, and page state.
+ *
+ * @param searchParams Current React Router URLSearchParams object.
+ * @returns Normalized search state used by inputs, API params, and pagination.
+ */
+function readTransactionSearchState(
+  searchParams: URLSearchParams,
+): TransactionSearchState {
+  return {
+    q: searchParams.get("q") ?? "",
+    dateFrom: searchParams.get("dateFrom") ?? "",
+    dateTo: searchParams.get("dateTo") ?? "",
+    amountMin: searchParams.get("amountMin") ?? "",
+    amountMax: searchParams.get("amountMax") ?? "",
+    accountId: searchParams.get("accountId") ?? "",
+    type: (searchParams.get("type") as ListParams["type"]) ?? "",
+    tags: searchParams.get("tags") ?? "",
+    sort:
+      (searchParams.get("sort") as TransactionSortColumn) ??
+      DEFAULT_SORT.column,
+    order:
+      (searchParams.get("order") as TransactionListSort["order"]) ??
+      DEFAULT_SORT.order,
+    page: Number(searchParams.get("page") ?? "1"),
+  };
+}
+
+/**
+ * Adds missing default URL params for the transaction list route.
+ *
+ * @param searchParams Current URLSearchParams from React Router.
+ * @returns A replacement URLSearchParams object when defaults were missing, or
+ * null when the URL already contains the defaults.
+ */
+function buildDefaultedSearchParams(
+  searchParams: URLSearchParams,
+): URLSearchParams | null {
+  const next = new URLSearchParams(searchParams);
+  let changed = false;
+
+  if (!next.get("sort")) {
+    next.set("sort", DEFAULT_SORT.column);
+    changed = true;
+  }
+  if (!next.get("order")) {
+    next.set("order", DEFAULT_SORT.order);
+    changed = true;
+  }
+  if (!next.get("page")) {
+    next.set("page", "1");
+    changed = true;
+  }
+  if (!next.get("limit")) {
+    next.set("limit", String(DEFAULT_LIMIT));
+    changed = true;
+  }
+
+  return changed ? next : null;
+}
+
+/**
+ * Applies URL param updates for filter, sort, and pagination controls.
+ *
+ * @param searchParams Current URLSearchParams from React Router.
+ * @param updates Param values to set; blank or undefined values remove a param.
+ * @param options resetPage controls whether page returns to 1, and replace
+ * controls browser-history behavior.
+ * @returns New URLSearchParams object ready for setSearchParams.
+ */
+function buildUpdatedSearchParams(
+  searchParams: URLSearchParams,
+  updates: Record<string, string | undefined>,
+  options?: SearchParamUpdateOptions,
+): URLSearchParams {
+  const next = new URLSearchParams(searchParams);
+  for (const [key, value] of Object.entries(updates)) {
+    if (value && value.length > 0) {
+      next.set(key, value);
+    } else {
+      next.delete(key);
+    }
+  }
+  if (options?.resetPage !== false) {
+    next.set("page", "1");
+  }
+  return next;
+}
+
+/**
+ * Builds the canonical default URL param object used by the Clear button.
+ *
+ * @returns Filter-free sort/page/limit defaults for setSearchParams.
+ */
+function defaultTransactionSearchParams(): Record<string, string> {
+  return {
+    sort: DEFAULT_SORT.column,
+    order: DEFAULT_SORT.order,
+    page: "1",
+    limit: String(DEFAULT_LIMIT),
+  };
+}
+
+/**
+ * Converts URL search state into typed listTransactions params.
+ *
+ * @param state URL-backed transaction search state.
+ * @param amountMinValue Parsed minimum amount filter.
+ * @param amountMaxValue Parsed maximum amount filter.
+ * @returns API params with blank filters omitted.
+ */
+function buildListParams(
+  state: TransactionSearchState,
+  amountMinValue: number | undefined,
+  amountMaxValue: number | undefined,
+): ListParams {
+  return {
+    q: state.q || undefined,
+    dateFrom: state.dateFrom || undefined,
+    dateTo: state.dateTo || undefined,
+    amountMin: amountMinValue,
+    amountMax: amountMaxValue,
+    accountId: state.accountId || undefined,
+    type: state.type || undefined,
+    tags: state.tags || undefined,
+    sort: state.sort,
+    order: state.order,
+    page: state.page,
+    limit: DEFAULT_LIMIT,
+  };
+}
+
+/**
+ * Adapts API transactions into shared table rows.
+ *
+ * @param transactions Transactions returned by GET /api/transactions.
+ * @returns Rows keyed by persisted transaction id with detail-page hrefs.
+ */
+function buildTransactionRows(
+  transactions: Transaction[] = [],
+): TransactionListRow[] {
+  return transactions.map((txn) => ({
+    key: txn.id,
+    date: txn.date,
+    description: txn.description,
+    amount: txn.amount,
+    currency: txn.currency,
+    accountLabel: txn.accountLabel,
+    href: `/transactions/${txn.id}`,
+  }));
+}
+
+/**
+ * Toggles one transaction id in a selection set without mutating the old set.
+ *
+ * @param current Current selected transaction ids.
+ * @param id Persisted transaction id to toggle.
+ * @returns A new Set with the id added or removed.
+ */
+function toggleSelectedId(current: Set<string>, id: string): Set<string> {
+  const next = new Set(current);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}
+
+/**
+ * Applies select-all changes for the currently rendered server page.
+ *
+ * @param current Current selected transaction ids.
+ * @param pageRows Rows rendered in TransactionListTable.
+ * @param nextChecked True adds all page rows; false removes all page rows.
+ * @returns A new Set reflecting the page-level selection change.
+ */
+function updatePageSelection(
+  current: Set<string>,
+  pageRows: TransactionListRow[],
+  nextChecked: boolean,
+): Set<string> {
+  const next = new Set(current);
+  for (const row of pageRows) {
+    if (nextChecked) next.add(row.key);
+    else next.delete(row.key);
+  }
+  return next;
+}
+
+/**
+ * Parses the bulk tag input into individual tag names.
+ *
+ * @param value Comma-separated tag input from the selection action bar.
+ * @returns Non-empty trimmed tag names.
+ */
+function parseBulkTagNames(value: string): string[] {
+  return value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Determines whether deletion emptied the current page.
+ *
+ * @param page Current one-based server page.
+ * @param rowCount Number of rows visible before deletion.
+ * @param deletedCount Number of selected transactions deleted.
+ * @returns True when pagination should move to the previous page.
+ */
+function shouldMoveToPreviousPage(
+  page: number,
+  rowCount: number,
+  deletedCount: number,
+): boolean {
+  return page > 1 && rowCount > 0 && deletedCount >= rowCount;
+}
+
+/**
+ * Transaction list page.
+ *
+ * The page owns URL-backed filters/sort/page, server queries, current-page
+ * selection, bulk tagging, and bulk deletion confirmation.
+ */
 export default function TransactionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
 
+  /*
+   * URL normalization effect for the transaction search flow.
+   *
+   * It examines the current URL params and, when sort/order/page/limit are
+   * missing, replaces the URL with canonical defaults. This keeps direct visits
+   * and cleared filters aligned with the design.md route contract without adding
+   * extra React state.
+   */
   useEffect(() => {
-    const next = new URLSearchParams(searchParams);
-    let changed = false;
-    if (!next.get("sort")) {
-      next.set("sort", DEFAULT_SORT.column);
-      changed = true;
-    }
-    if (!next.get("order")) {
-      next.set("order", DEFAULT_SORT.order);
-      changed = true;
-    }
-    if (!next.get("page")) {
-      next.set("page", "1");
-      changed = true;
-    }
-    if (!next.get("limit")) {
-      next.set("limit", String(DEFAULT_LIMIT));
-      changed = true;
-    }
-    if (changed) {
+    const next = buildDefaultedSearchParams(searchParams);
+    if (next) {
       setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
-  const q = searchParams.get("q") ?? "";
-  const dateFrom = searchParams.get("dateFrom") ?? "";
-  const dateTo = searchParams.get("dateTo") ?? "";
-  const amountMin = searchParams.get("amountMin") ?? "";
-  const amountMax = searchParams.get("amountMax") ?? "";
-  const accountId = searchParams.get("accountId") ?? "";
-  const type = (searchParams.get("type") as ListParams["type"]) ?? "";
-  const tags = searchParams.get("tags") ?? "";
-  const sort =
-    (searchParams.get("sort") as TransactionSortColumn) ?? DEFAULT_SORT.column;
-  const order =
-    (searchParams.get("order") as TransactionListSort["order"]) ??
-    DEFAULT_SORT.order;
-  const page = Number(searchParams.get("page") ?? "1");
+  const searchState = useMemo(
+    () => readTransactionSearchState(searchParams),
+    [searchParams],
+  );
+  const {
+    q,
+    dateFrom,
+    dateTo,
+    amountMin,
+    amountMax,
+    accountId,
+    type,
+    sort,
+    order,
+    page,
+  } = searchState;
 
   const amountMinValue = normalizeAmount(amountMin);
   const amountMaxValue = normalizeAmount(amountMax);
@@ -85,25 +338,47 @@ export default function TransactionsPage() {
     amountMaxValue !== undefined &&
     amountMinValue > amountMaxValue;
 
+  // Bulk action flow: selected transaction ids for the currently rendered
+  // server page. Row checkboxes and page select-all update it; successful bulk
+  // tag/delete mutations clear it.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Bulk tagging flow: comma-separated tag entry shown only while rows are
+  // selected. The input updates on typing and clears after successful bulk tag
+  // or delete operations.
   const [bulkTagInput, setBulkTagInput] = useState("");
+
+  // Bulk action flow: inline error shown in the selection action bar. It is set
+  // for empty tag submissions or API mutation errors and cleared on success.
   const [bulkError, setBulkError] = useState<string | null>(null);
+
+  // Bulk deletion flow: selected ids pending confirmation. Clicking delete
+  // selected fills it, cancel clears it, and successful deletion clears it.
   const [deleteTarget, setDeleteTarget] = useState<string[] | null>(null);
 
-  const params: ListParams = {
-    q: q || undefined,
-    dateFrom: dateFrom || undefined,
-    dateTo: dateTo || undefined,
-    amountMin: amountMinValue,
-    amountMax: amountMaxValue,
-    accountId: accountId || undefined,
-    type: type || undefined,
-    tags: tags || undefined,
-    sort,
-    order,
-    page,
-    limit: DEFAULT_LIMIT,
-  };
+  const params = useMemo(
+    () => buildListParams(searchState, amountMinValue, amountMaxValue),
+    [searchState, amountMinValue, amountMaxValue],
+  );
+
+  /**
+   * URL update handler for filter, sort, and pagination flows.
+   *
+   * @param updates Param values to set; blank or undefined removes a param.
+   * @param options resetPage controls whether page returns to 1, and replace
+   * controls browser-history behavior.
+   * @sideEffect Writes the new URL search params through React Router.
+   */
+  const updateSearchParams = useCallback(
+    (
+      updates: Record<string, string | undefined>,
+      options?: SearchParamUpdateOptions,
+    ) => {
+      const next = buildUpdatedSearchParams(searchParams, updates, options);
+      setSearchParams(next, { replace: options?.replace ?? false });
+    },
+    [searchParams, setSearchParams],
+  );
 
   const { data, isLoading } = useQuery({
     queryKey: ["transactions", params],
@@ -119,31 +394,13 @@ export default function TransactionsPage() {
   });
 
   const rows = useMemo<TransactionListRow[]>(
-    () =>
-      (data?.data ?? []).map((txn) => ({
-        key: txn.id,
-        date: txn.date,
-        description: txn.description,
-        amount: txn.amount,
-        currency: txn.currency,
-        accountLabel: txn.accountLabel,
-        href: `/transactions/${txn.id}`,
-      })),
+    () => buildTransactionRows(data?.data),
     [data?.data],
   );
 
   const selectedCount = selectedIds.size;
   const allSelected =
     rows.length > 0 && rows.every((row) => selectedIds.has(row.key));
-
-  const columns: TransactionListColumn[] = [
-    "select",
-    "date",
-    "description",
-    "amount",
-    "account",
-    "tags",
-  ];
 
   const bulkMutation = useMutation({
     mutationFn: ({
@@ -165,9 +422,11 @@ export default function TransactionsPage() {
   const deleteMutation = useMutation({
     mutationFn: (ids: string[]) => bulkDeleteTransactions(ids),
     onSuccess: (_result, deletedIds) => {
-      const deletedCount = deletedIds.length;
-      const shouldGoPrevPage =
-        page > 1 && rows.length > 0 && deletedCount >= rows.length;
+      const shouldGoPrevPage = shouldMoveToPreviousPage(
+        page,
+        rows.length,
+        deletedIds.length,
+      );
 
       setDeleteTarget(null);
       setSelectedIds(new Set());
@@ -183,27 +442,14 @@ export default function TransactionsPage() {
     onError: (e: Error) => setBulkError(e.message),
   });
 
-  const updateSearchParams = useCallback(
-    (
-      updates: Record<string, string | undefined>,
-      options?: { resetPage?: boolean; replace?: boolean },
-    ) => {
-      const next = new URLSearchParams(searchParams);
-      for (const [key, value] of Object.entries(updates)) {
-        if (value && value.length > 0) {
-          next.set(key, value);
-        } else {
-          next.delete(key);
-        }
-      }
-      if (options?.resetPage !== false) {
-        next.set("page", "1");
-      }
-      setSearchParams(next, { replace: options?.replace ?? false });
-    },
-    [searchParams, setSearchParams],
-  );
-
+  /*
+   * Page clamp effect for filter and deletion flows.
+   *
+   * It examines the latest server total and current URL page. If filtering or
+   * deleting leaves the URL page beyond the last available page, it replaces the
+   * URL page with the last valid page so the table does not sit on an empty page
+   * that has results on earlier pages.
+   */
   useEffect(() => {
     if (!data?.total) return;
 
@@ -214,12 +460,25 @@ export default function TransactionsPage() {
         { resetPage: false, replace: true },
       );
     }
-  }, [data?.total, page, searchParams, setSearchParams, updateSearchParams]);
+  }, [data?.total, page, updateSearchParams]);
 
+  /**
+   * Single filter update handler.
+   *
+   * @param key URL search param controlled by one filter input.
+   * @param value Raw input/select value; blank removes the filter.
+   * @sideEffect Updates URL params and resets to page 1.
+   */
   function setParam(key: string, value: string) {
     updateSearchParams({ [key]: value });
   }
 
+  /**
+   * Table sort update handler.
+   *
+   * @param next Sort column/order emitted by TransactionListTable.
+   * @sideEffect Writes sort/order to URL params and resets to page 1.
+   */
   function setSort(next: TransactionListSort) {
     updateSearchParams(
       {
@@ -230,20 +489,25 @@ export default function TransactionsPage() {
     );
   }
 
+  /**
+   * Row selection handler.
+   *
+   * @param id Persisted transaction id for the toggled table row.
+   * @sideEffect Adds or removes that id in the current selection set.
+   */
   function toggleSelect(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setSelectedIds((prev) => toggleSelectedId(prev, id));
   }
 
-  function handleBulkAction(action: "add" | "remove") {
-    const names = bulkTagInput
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+  /**
+   * Bulk tag submit handler.
+   *
+   * @param action Whether tags should be added to or removed from selected rows.
+   * @sideEffect Validates the tag input, records an inline error when empty, or
+   * starts the bulk tag mutation for the current selection.
+   */
+  function handleBulkAction(action: BulkTagAction) {
+    const names = parseBulkTagNames(bulkTagInput);
     if (!names.length) {
       setBulkError("Enter at least one tag");
       return;
@@ -340,15 +604,9 @@ export default function TransactionsPage() {
         </div>
         <button
           onClick={() => {
-            setSearchParams(
-              {
-                sort: DEFAULT_SORT.column,
-                order: DEFAULT_SORT.order,
-                page: "1",
-                limit: String(DEFAULT_LIMIT),
-              },
-              { replace: false },
-            );
+            setSearchParams(defaultTransactionSearchParams(), {
+              replace: false,
+            });
           }}
           className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-800"
         >
@@ -417,9 +675,9 @@ export default function TransactionsPage() {
         <TransactionListTable
           loading={isLoading}
           rows={rows}
-          columns={columns}
+          columns={TRANSACTION_COLUMNS}
           sort={{ column: sort, order }}
-          sortableColumns={["date", "description", "amount", "account"]}
+          sortableColumns={TRANSACTION_SORTABLE_COLUMNS}
           onSortChange={setSort}
           selection={{
             pageSelected: allSelected,
@@ -429,14 +687,9 @@ export default function TransactionsPage() {
           isRowSelectable={() => true}
           onToggleRow={(row) => toggleSelect(row.key)}
           onTogglePage={(pageRows, nextChecked) => {
-            setSelectedIds((current) => {
-              const next = new Set(current);
-              for (const row of pageRows) {
-                if (nextChecked) next.add(row.key);
-                else next.delete(row.key);
-              }
-              return next;
-            });
+            setSelectedIds((current) =>
+              updatePageSelection(current, pageRows, nextChecked),
+            );
           }}
           getRowHref={(row) => row.href}
           emptyMessage="No transactions found"
