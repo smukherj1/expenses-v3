@@ -1,5 +1,22 @@
 import { z } from "zod";
 
+const accountIdsSchema = z.preprocess((value) => {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const ids = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return ids.length > 0 ? ids : undefined;
+}, z.array(z.string().uuid()).optional());
+
 export const listTransactionsSchema = z.object({
   q: z.string().optional(),
   dateFrom: z.string().date().optional(),
@@ -7,6 +24,7 @@ export const listTransactionsSchema = z.object({
   amountMin: z.coerce.number().optional(),
   amountMax: z.coerce.number().optional(),
   accountId: z.string().uuid().optional(),
+  accountIds: accountIdsSchema,
   tags: z.string().optional(),
   type: z.enum(["income", "expense"]).optional(),
   sort: z.enum(["date", "amount", "description", "account"]).default("date"),

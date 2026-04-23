@@ -29,6 +29,7 @@ export interface ListParams {
   amountMin?: number;
   amountMax?: number;
   accountId?: string;
+  accountIds?: string[];
   tags?: string;
   type?: "income" | "expense";
   sort?: "date" | "amount" | "description" | "account";
@@ -42,7 +43,8 @@ export function listTransactions(
 ): Promise<TransactionList> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== "") qs.set(k, String(v));
+    if (v === undefined || v === "") continue;
+    qs.set(k, Array.isArray(v) ? v.join(",") : String(v));
   }
   const query = qs.toString();
   return get<TransactionList>(`/transactions${query ? `?${query}` : ""}`);

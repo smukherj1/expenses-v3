@@ -12,6 +12,11 @@ The current architecture already draws a clean boundary:
 
 This implementation should use the existing `TransactionListTable`, add a focused account multi-select component, and extend the existing `Pagination` component. Do not add a table/grid library for this work.
 
+## Background
+
+PRD: PRD.md
+Designs: design.md, frontend/design.md, backend/design.md
+
 ## Behavior
 
 ### Account Filter

@@ -25,6 +25,7 @@ export async function listTransactions(
     amountMin?: number;
     amountMax?: number;
     accountId?: string;
+    accountIds?: string[];
     tags?: string;
     type?: "income" | "expense";
     sort: "date" | "amount" | "description" | "account";
@@ -37,7 +38,9 @@ export async function listTransactions(
 
   conditions.push(eq(accounts.userId, userId));
 
-  if (params.accountId) {
+  if (params.accountIds?.length) {
+    conditions.push(inArray(transactions.accountId, params.accountIds));
+  } else if (params.accountId) {
     conditions.push(eq(transactions.accountId, params.accountId));
   }
 

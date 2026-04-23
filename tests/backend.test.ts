@@ -893,6 +893,61 @@ describe("Transactions", () => {
     }
   });
 
+  it("GET /api/transactions — filters by accountIds and prefers them over accountId", async () => {
+    const otherAccountLabel = trackAccount(
+      uniqueLabel("Transactions Filter Secondary"),
+    );
+    await seedCsvRows([
+      {
+        date: "2025-03-04",
+        description: "Secondary Grocery",
+        amount: "-14.25",
+        account: otherAccountLabel,
+      },
+      {
+        date: "2025-03-06",
+        description: "Secondary Salary",
+        amount: "1250.0",
+        account: otherAccountLabel,
+      },
+    ]);
+    const otherAccountId = await getAccountId(otherAccountLabel);
+
+    const combined = await json<{
+      data: Array<{ accountId: string }>;
+      total: number;
+    }>(
+      "GET",
+      `/transactions?accountId=${accountId}&accountIds=${otherAccountId}`,
+    );
+    expect(combined.status).toBe(200);
+    expect(combined.data.total).toBe(2);
+    expect(combined.data.data).toHaveLength(2);
+    for (const txn of combined.data.data) {
+      expect(txn.accountId).toBe(otherAccountId);
+    }
+  });
+
+  it("GET /api/transactions — treats a single accountIds value like accountId", async () => {
+    const singleAccountIds = await json<{
+      data: Array<{ accountId: string }>;
+    }>("GET", `/transactions?accountIds=${accountId}`);
+    expect(singleAccountIds.status).toBe(200);
+    expect(singleAccountIds.data.data).toHaveLength(3);
+    for (const txn of singleAccountIds.data.data) {
+      expect(txn.accountId).toBe(accountId);
+    }
+  });
+
+  it("GET /api/transactions — rejects invalid accountIds uuid", async () => {
+    const { status, data } = await json<{ error: { code: string } }>(
+      "GET",
+      "/transactions?accountIds=not-a-uuid",
+    );
+    expect(status).toBe(400);
+    expect(data.error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("GET /api/transactions — filters by date range", async () => {
     const { status, data } = await json<{ data: Array<{ date: string }> }>(
       "GET",

@@ -167,6 +167,18 @@ async function getTransactionsForAccount(accountId: string) {
   return data.data;
 }
 
+async function getAccountIdByLabel(label: string): Promise<string> {
+  const accounts = await apiJson<Array<{ id: string; label: string }>>(
+    "GET",
+    "/accounts",
+  );
+  const account = accounts.find((entry) => entry.label === label);
+  if (!account) {
+    throw new Error(`Missing account: ${label}`);
+  }
+  return account.id;
+}
+
 async function uploadAndWaitForOutcome(
   page: Page,
   options: {
@@ -254,29 +266,91 @@ async function isVisible(page: Page, selector: string): Promise<boolean> {
   }
 }
 
-async function selectTransactionAccountFilter(page: Page, label: string) {
+async function selectTransactionAccountFilters(
+  page: Page,
+  labels: string | string[],
+) {
+  const selectedLabels = Array.isArray(labels) ? labels : [labels];
+  const selectedAccountIds = await Promise.all(
+    selectedLabels.map((label) => getAccountIdByLabel(label)),
+  );
+
+  const panel = page.locator('[data-testid="account-filter-panel"]');
+  if (!(await panel.isVisible().catch(() => false))) {
+    await page.locator('[data-testid="account-filter-trigger"]').click();
+  }
+  await panel.waitFor({ state: "visible", timeout: 5000 });
+
+  await page.locator('[data-testid="account-filter-clear-button"]').click();
   await page.waitForFunction(
-    (accountLabel) =>
-      Array.from(
-        document.querySelectorAll('[data-testid="filter-account"] option'),
-      ).some((option) => option.textContent === accountLabel),
-    label,
+    () => new URL(window.location.href).searchParams.get("accountIds") === null,
     { timeout: 5000 },
   );
-  await page.locator('[data-testid="filter-account"]').selectOption({ label });
+  for (const accountId of selectedAccountIds) {
+    await page.waitForFunction(
+      (id) => {
+        const input = document.querySelector(`[data-account-id="${id}"]`);
+        return input instanceof HTMLInputElement && input.checked === false;
+      },
+      accountId,
+      { timeout: 5000 },
+    );
+  }
+
+  for (const accountId of selectedAccountIds) {
+    const checkbox = page.locator(`[data-account-id="${accountId}"]`);
+    await checkbox.click();
+    await page.waitForFunction(
+      (id) => {
+        const input = document.querySelector(`[data-account-id="${id}"]`);
+        return input instanceof HTMLInputElement && input.checked;
+      },
+      accountId,
+      { timeout: 5000 },
+    );
+  }
+
   await page.waitForFunction(
-    (accountLabel) => {
+    (accountLabels) => {
+      const url = new URL(window.location.href);
+      const accountIds = url.searchParams.get("accountIds");
+      if (!accountIds) return false;
       const rows = Array.from(
         document.querySelectorAll('[data-testid="transaction-row"]'),
       );
       return (
         rows.length > 0 &&
-        rows.every((row) => row.textContent?.includes(accountLabel))
+        rows.every((row) =>
+          (accountLabels as string[]).some((label) =>
+            row.textContent?.includes(label),
+          ),
+        )
       );
     },
-    label,
+    selectedLabels,
     { timeout: 5000 },
   );
+  if (await panel.isVisible().catch(() => false)) {
+    await page.locator('[data-testid="account-filter-trigger"]').click();
+    await panel.waitFor({ state: "hidden", timeout: 5000 });
+  }
+}
+
+async function clearTransactionAccountFilters(page: Page) {
+  const panel = page.locator('[data-testid="account-filter-panel"]');
+  if (!(await panel.isVisible().catch(() => false))) {
+    await page.locator('[data-testid="account-filter-trigger"]').click();
+  }
+  await panel.waitFor({ state: "visible", timeout: 5000 });
+  await page.locator('[data-testid="account-filter-clear-button"]').click();
+  await page.waitForFunction(
+    () => new URL(window.location.href).searchParams.get("accountIds") === null,
+    { timeout: 5000 },
+  );
+  if (await panel.isVisible().catch(() => false)) {
+    await page.locator('[data-testid="account-filter-trigger"]').click();
+    await panel.waitFor({ state: "hidden", timeout: 5000 });
+  }
 }
 
 async function searchTransactions(page: Page, query: string) {
@@ -482,7 +556,7 @@ describe("Upload", () => {
     expect(
       await page.locator('[data-testid="duplicate-review-row"]').count(),
     ).toBe(20);
-    await page.locator('[data-testid="pagination"] button').nth(1).click();
+    await page.locator('[data-testid="pagination-next"]').click();
     await page.waitForSelector('[data-testid="duplicate-review-row-24"]', {
       timeout: 8000,
     });
@@ -735,7 +809,9 @@ describe("Upload", () => {
 describe("Transactions", () => {
   let page: Page;
   let accountLabel: string;
+  let accountId: string;
   let secondaryAccountLabel: string;
+  let secondaryAccountId: string;
   let searchLabel: string;
 
   beforeEach(async () => {
@@ -769,10 +845,18 @@ describe("Transactions", () => {
         account: secondaryAccountLabel,
       },
     ]);
-    await page.goto(`${FRONTEND}/transactions`);
-    await page.waitForSelector('[data-testid="transaction-row"]', {
-      timeout: 10000,
+    accountId = await getAccountIdByLabel(accountLabel);
+    secondaryAccountId = await getAccountIdByLabel(secondaryAccountLabel);
+    const params = new URLSearchParams({
+      accountIds: `${accountId},${secondaryAccountId}`,
     });
+    await page.goto(`${FRONTEND}/transactions?${params.toString()}`);
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('[data-testid="transaction-row"]').length ===
+        4,
+      { timeout: 10000 },
+    );
   });
 
   afterEach(async () => {
@@ -780,13 +864,13 @@ describe("Transactions", () => {
   });
 
   it("shows transaction rows", async () => {
-    await selectTransactionAccountFilter(page, accountLabel);
+    await selectTransactionAccountFilters(page, accountLabel);
     const count = await page.locator('[data-testid="transaction-row"]').count();
     expect(count).toBeGreaterThan(0);
   });
 
   it("defaults to oldest-first ordering", async () => {
-    await selectTransactionAccountFilter(page, accountLabel);
+    await selectTransactionAccountFilters(page, accountLabel);
     const rows = await page
       .locator('[data-testid="transaction-row"]')
       .allTextContents();
@@ -850,7 +934,7 @@ describe("Transactions", () => {
   });
 
   it("filters transactions by type=expense", async () => {
-    await selectTransactionAccountFilter(page, accountLabel);
+    await selectTransactionAccountFilters(page, accountLabel);
     await page.locator('[data-testid="filter-type"]').selectOption("expense");
     await page.waitForFunction(
       () =>
@@ -866,7 +950,7 @@ describe("Transactions", () => {
   });
 
   it("filters transactions by type=income", async () => {
-    await selectTransactionAccountFilter(page, accountLabel);
+    await selectTransactionAccountFilters(page, accountLabel);
     await page.locator('[data-testid="filter-type"]').selectOption("income");
     await page.waitForFunction(
       () =>
@@ -882,7 +966,7 @@ describe("Transactions", () => {
   });
 
   it("filters transactions by amount range and account", async () => {
-    await selectTransactionAccountFilter(page, secondaryAccountLabel);
+    await selectTransactionAccountFilters(page, secondaryAccountLabel);
     await page.locator('[data-testid="filter-amount-min"]').fill("-20");
     await page.locator('[data-testid="filter-amount-max"]').fill("0");
     await page.waitForFunction(
@@ -898,8 +982,36 @@ describe("Transactions", () => {
     expect(rows[0]).toContain("Airport Shuttle");
   });
 
+  it("filters transactions by multiple accounts and clears back to all accounts", async () => {
+    await selectTransactionAccountFilters(page, [
+      accountLabel,
+      secondaryAccountLabel,
+    ]);
+    const url = new URL(page.url());
+    expect(url.searchParams.get("accountIds")).toBeTruthy();
+    expect(url.searchParams.get("accountId")).toBeNull();
+
+    const rows = await page
+      .locator('[data-testid="transaction-row"]')
+      .allTextContents();
+    expect(rows).toHaveLength(4);
+    expect(rows.some((row) => row.includes(accountLabel))).toBe(true);
+    expect(rows.some((row) => row.includes(secondaryAccountLabel))).toBe(true);
+
+    await searchTransactions(page, searchLabel);
+    await clearTransactionAccountFilters(page);
+    const clearedRows = await page
+      .locator('[data-testid="transaction-row"]')
+      .allTextContents();
+    expect(clearedRows).toHaveLength(4);
+  });
+
   it("updates URL params when sorting and resets page", async () => {
-    await page.goto(`${FRONTEND}/transactions?page=2`);
+    const params = new URLSearchParams({
+      accountIds: `${accountId},${secondaryAccountId}`,
+      page: "2",
+    });
+    await page.goto(`${FRONTEND}/transactions?${params.toString()}`);
     await page.waitForSelector('[data-testid="transaction-row"]', {
       timeout: 10000,
     });
@@ -912,6 +1024,69 @@ describe("Transactions", () => {
     expect(url.searchParams.get("sort")).toBe("date");
     expect(url.searchParams.get("order")).toBe("desc");
     expect(url.searchParams.get("page")).toBe("1");
+  });
+
+  it("supports first and last pagination controls", async () => {
+    const paginationRows = Array.from({ length: 52 }, (_, index) => ({
+      date: "2025-08-12",
+      description: `Pagination Row ${String(index + 1).padStart(2, "0")}`,
+      amount: -1.0,
+      account: accountLabel,
+    }));
+    await seedCsvRows(paginationRows);
+
+    const params = new URLSearchParams({
+      accountIds: accountId,
+      page: "2",
+    });
+    await page.goto(`${FRONTEND}/transactions?${params.toString()}`);
+    await page.waitForSelector('[data-testid="pagination"]', {
+      timeout: 10000,
+    });
+
+    await page.locator('[data-testid="pagination-first"]').click();
+    await page.waitForFunction(
+      () => new URL(window.location.href).searchParams.get("page") === "1",
+      { timeout: 5000 },
+    );
+    let url = new URL(page.url());
+    expect(url.searchParams.get("page")).toBe("1");
+
+    await page.waitForFunction(
+      () => {
+        const button = document.querySelector(
+          '[data-testid="pagination-last"]',
+        );
+        return button instanceof HTMLButtonElement && button.disabled === false;
+      },
+      { timeout: 5000 },
+    );
+    await page.locator('[data-testid="pagination-last"]').evaluate((el) => {
+      (el as HTMLButtonElement).click();
+    });
+    await page.waitForFunction(
+      () => new URL(window.location.href).searchParams.get("page") === "2",
+      { timeout: 5000 },
+    );
+    url = new URL(page.url());
+    expect(url.searchParams.get("page")).toBe("2");
+
+    const firstDisabled = await page
+      .locator('[data-testid="pagination-first"]')
+      .isDisabled();
+    const prevDisabled = await page
+      .locator('[data-testid="pagination-prev"]')
+      .isDisabled();
+    const nextDisabled = await page
+      .locator('[data-testid="pagination-next"]')
+      .isDisabled();
+    const lastDisabled = await page
+      .locator('[data-testid="pagination-last"]')
+      .isDisabled();
+    expect(firstDisabled).toBe(false);
+    expect(prevDisabled).toBe(false);
+    expect(nextDisabled).toBe(true);
+    expect(lastDisabled).toBe(true);
   });
 });
 
@@ -1046,7 +1221,7 @@ describe("Tagging — bulk", () => {
     await page.waitForSelector('[data-testid="transaction-row"]', {
       timeout: 10000,
     });
-    await selectTransactionAccountFilter(page, accountLabel);
+    await selectTransactionAccountFilters(page, accountLabel);
   });
 
   afterEach(async () => {
@@ -1141,7 +1316,7 @@ describe("Deletion — list page", () => {
     await page.waitForSelector('[data-testid="transaction-row"]', {
       timeout: 10000,
     });
-    await selectTransactionAccountFilter(page, singleAccount);
+    await selectTransactionAccountFilters(page, singleAccount);
 
     await page
       .locator('[data-testid="search-input"]')
@@ -1197,7 +1372,7 @@ describe("Deletion — list page", () => {
     await page.waitForSelector('[data-testid="transaction-row"]', {
       timeout: 10000,
     });
-    await selectTransactionAccountFilter(page, bulkAccount);
+    await selectTransactionAccountFilters(page, bulkAccount);
 
     await page
       .locator('[data-testid="search-input"]')

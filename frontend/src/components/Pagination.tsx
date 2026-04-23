@@ -6,7 +6,7 @@ interface Props {
 }
 
 export default function Pagination({ page, total, limit, onPage }: Props) {
-  const totalPages = Math.ceil(total / limit);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
   if (totalPages <= 1) return null;
 
   return (
@@ -15,9 +15,18 @@ export default function Pagination({ page, total, limit, onPage }: Props) {
       data-testid="pagination"
     >
       <button
+        onClick={() => onPage(1)}
+        disabled={page <= 1}
+        className="px-3 py-1 text-sm border rounded disabled:opacity-40 hover:bg-gray-50"
+        data-testid="pagination-first"
+      >
+        First
+      </button>
+      <button
         onClick={() => onPage(page - 1)}
         disabled={page <= 1}
         className="px-3 py-1 text-sm border rounded disabled:opacity-40 hover:bg-gray-50"
+        data-testid="pagination-prev"
       >
         Prev
       </button>
@@ -28,8 +37,17 @@ export default function Pagination({ page, total, limit, onPage }: Props) {
         onClick={() => onPage(page + 1)}
         disabled={page >= totalPages}
         className="px-3 py-1 text-sm border rounded disabled:opacity-40 hover:bg-gray-50"
+        data-testid="pagination-next"
       >
         Next
+      </button>
+      <button
+        onClick={() => onPage(totalPages)}
+        disabled={page >= totalPages}
+        className="px-3 py-1 text-sm border rounded disabled:opacity-40 hover:bg-gray-50"
+        data-testid="pagination-last"
+      >
+        Last
       </button>
     </div>
   );

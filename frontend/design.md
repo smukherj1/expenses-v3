@@ -58,7 +58,7 @@ A `<RootLayout />` wraps all routes with the app shell (sidebar nav, header).
           │
           ├── <TransactionsPage />
           │   ├── <SearchBar />             # Description substring search input
-          │   ├── <FilterPanel />           # Date, amount, account, tags, type filters
+          │   ├── <FilterPanel />           # Date, amount, multi-account, tags, type filters
           │   ├── <TransactionListTable />  # Server-backed sortable, paginated table with row selection
           │   └── <SelectionActionBar />     # Appears when rows are selected; bulk tag + bulk delete
           │
@@ -91,6 +91,7 @@ A `<RootLayout />` wraps all routes with the app shell (sidebar nav, header).
 | `<Header />`               | Page title derived from route, optional breadcrumbs                                                                                              |
 | `<Pagination />`           | Page controls, used by transaction lists and TopNTable                                                                                           |
 | `<TransactionListTable />` | Controlled presentational table for transaction-shaped rows; parent pages own fetching, filtering, sorting, pagination, selection, and mutations |
+| `<AccountMultiSelect />`   | Multi-select popover for transaction account filtering with checkbox rows and URL-backed selection                                               |
 | `<TagBadge />`             | Displays a tag name with optional remove button                                                                                                  |
 | `<TagInput />`             | Autocomplete input for adding tags (queries GET `/api/tags`)                                                                                     |
 | `<EmptyState />`           | Placeholder when no data exists                                                                                                                  |
@@ -173,11 +174,13 @@ Institution-format UX rules:
 1. `/transactions` normalizes missing URL params to `sort=date`, `order=asc`, `page=1`, and `limit=50`.
 2. The filter panel controls description search (`q`), date range, signed amount range, account id, transaction type, and tags.
 3. Amount filter inputs stay as strings in the UI. Empty values are omitted from API params, and an invalid min/max range disables the list query and shows an inline validation message.
-4. Account filtering uses `GET /api/accounts` to populate a selector and sends the selected account id as `accountId`.
+4. Account filtering uses `GET /api/accounts` to populate a multi-select popover and sends the selected ids as `accountIds`. Legacy `accountId` links still work, but new interactions write `accountIds`.
 5. The page calls `GET /api/transactions` through TanStack Query with `keepPreviousData` so existing rows stay visible while filters, sorts, or pages transition.
 6. Sortable headers are date, description, amount, and account. Clicking a new column sorts ascending; clicking the active column toggles ascending/descending.
 7. Filter and sort changes reset `page=1`. If a filter or deletion leaves the current page beyond the result count, the page is clamped to the last available page.
 8. Row selection is scoped to the currently rendered server page. Bulk tag and bulk delete invalidate the transactions query and clear selection on success.
+
+Pagination controls expose `First`, `Prev`, `Next`, and `Last` in addition to the current page indicator.
 
 ### Bulk Tagging and Deletion Flow
 
