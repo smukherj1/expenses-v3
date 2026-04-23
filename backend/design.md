@@ -28,14 +28,14 @@ Base path: `/api`
 
 ### Transactions
 
-| Method | Path                            | Description                                                                                                                                                                                            |
-| ------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| GET    | `/api/transactions`             | Search/filter transactions (query params: `q`, `dateFrom`, `dateTo`, `amountMin`, `amountMax`, `accountIds`, `accountId` for backward compatibility, `tags`, `type`, `sort`, `order`, `page`, `limit`) |
-| GET    | `/api/transactions/:id`         | Get single transaction with tags                                                                                                                                                                       |
-| PATCH  | `/api/transactions/:id`         | Update transaction (tags, description)                                                                                                                                                                 |
-| POST   | `/api/transactions/bulk-tag`    | `{ transactionIds[], tagNames[], action: 'add' \| 'remove' }`                                                                                                                                          |
-| POST   | `/api/transactions/bulk-delete` | `{ transactionIds[] }`                                                                                                                                                                                 |
-| DELETE | `/api/transactions/:id`         | Delete transaction                                                                                                                                                                                     |
+| Method | Path                            | Description                                                                                                                                                    |
+| ------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/transactions`             | Search/filter transactions (query params: `q`, `dateFrom`, `dateTo`, `amountMin`, `amountMax`, `accountIds`, `tags`, `type`, `sort`, `order`, `page`, `limit`) |
+| GET    | `/api/transactions/:id`         | Get single transaction with tags                                                                                                                               |
+| PATCH  | `/api/transactions/:id`         | Update transaction (tags, description)                                                                                                                         |
+| POST   | `/api/transactions/bulk-tag`    | `{ transactionIds[], tagNames[], action: 'add' \| 'remove' }`                                                                                                  |
+| POST   | `/api/transactions/bulk-delete` | `{ transactionIds[] }`                                                                                                                                         |
+| DELETE | `/api/transactions/:id`         | Delete transaction                                                                                                                                             |
 
 ### Tags
 
@@ -229,8 +229,7 @@ Supported filters:
 - `q`: case-insensitive substring match against `transactions.description`.
 - `dateFrom` / `dateTo`: inclusive transaction date bounds.
 - `amountMin` / `amountMax`: inclusive signed amount bounds.
-- `accountIds`: comma-separated account ids. When present, this takes precedence over `accountId`.
-- `accountId`: exact account id for backward-compatible links.
+- `accountIds`: comma-separated account ids.
 - `tags`: comma-separated tag names. Rows match when the transaction has any listed tag.
 - `type`: `income` for amounts greater than 0, `expense` for amounts less than 0.
 

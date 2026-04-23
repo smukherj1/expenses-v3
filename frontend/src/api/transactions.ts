@@ -28,7 +28,6 @@ export interface ListParams {
   dateTo?: string;
   amountMin?: number;
   amountMax?: number;
-  accountId?: string;
   accountIds?: string[];
   tags?: string;
   type?: "income" | "expense";

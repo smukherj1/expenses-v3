@@ -174,7 +174,7 @@ Institution-format UX rules:
 1. `/transactions` normalizes missing URL params to `sort=date`, `order=asc`, `page=1`, and `limit=50`.
 2. The filter panel controls description search (`q`), date range, signed amount range, account id, transaction type, and tags.
 3. Amount filter inputs stay as strings in the UI. Empty values are omitted from API params, and an invalid min/max range disables the list query and shows an inline validation message.
-4. Account filtering uses `GET /api/accounts` to populate a multi-select popover and sends the selected ids as `accountIds`. Legacy `accountId` links still work, but new interactions write `accountIds`.
+4. Account filtering uses `GET /api/accounts` to populate a multi-select popover and sends the selected ids as `accountIds`.
 5. The page calls `GET /api/transactions` through TanStack Query with `keepPreviousData` so existing rows stay visible while filters, sorts, or pages transition.
 6. Sortable headers are date, description, amount, and account. Clicking a new column sorts ascending; clicking the active column toggles ascending/descending.
 7. Filter and sort changes reset `page=1`. If a filter or deletion leaves the current page beyond the result count, the page is clamped to the last available page.

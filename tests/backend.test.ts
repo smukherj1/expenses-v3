@@ -214,7 +214,7 @@ async function getTransactionsForAccount(accountId: string) {
       date: string;
       accountId: string;
     }>;
-  }>("GET", `/transactions?accountId=${accountId}&limit=100`);
+  }>("GET", `/transactions?accountIds=${accountId}&limit=100`);
   return data.data;
 }
 
@@ -775,7 +775,7 @@ describe("Transactions", () => {
       total: number;
       page: number;
       limit: number;
-    }>("GET", `/transactions?accountId=${accountId}`);
+    }>("GET", `/transactions?accountIds=${accountId}`);
 
     expect(status).toBe(200);
     expect(Array.isArray(data.data)).toBe(true);
@@ -815,7 +815,7 @@ describe("Transactions", () => {
 
     const amountAsc = await json<{ data: Array<{ amount: number }> }>(
       "GET",
-      `/transactions?accountId=${accountId}&sort=amount&order=asc`,
+      `/transactions?accountIds=${accountId}&sort=amount&order=asc`,
     );
     expect(amountAsc.status).toBe(200);
     expect(amountAsc.data.data.map((row) => row.amount)).toEqual([
@@ -824,7 +824,7 @@ describe("Transactions", () => {
 
     const descriptionAsc = await json<{ data: Array<{ description: string }> }>(
       "GET",
-      `/transactions?accountId=${accountId}&sort=description&order=asc`,
+      `/transactions?accountIds=${accountId}&sort=description&order=asc`,
     );
     expect(descriptionAsc.status).toBe(200);
     expect(descriptionAsc.data.data.map((row) => row.description)).toEqual([
@@ -835,7 +835,7 @@ describe("Transactions", () => {
 
     const accountAsc = await json<{
       data: Array<{ accountLabel: string }>;
-    }>("GET", `/transactions?accountId=${accountId}&sort=account&order=asc`);
+    }>("GET", `/transactions?accountIds=${accountId}&sort=account&order=asc`);
     expect(accountAsc.status).toBe(200);
     expect(accountAsc.data.data.map((row) => row.accountLabel)).toEqual(
       Array(accountAsc.data.data.length).fill(accountLabel),
@@ -862,30 +862,30 @@ describe("Transactions", () => {
   it("GET /api/transactions — filters by amount range", async () => {
     const bounded = await json<{ data: Array<{ amount: number }> }>(
       "GET",
-      `/transactions?accountId=${accountId}&amountMin=-20&amountMax=0`,
+      `/transactions?accountIds=${accountId}&amountMin=-20&amountMax=0`,
     );
     expect(bounded.status).toBe(200);
     expect(bounded.data.data.map((row) => row.amount)).toEqual([-6.75]);
 
     const minOnly = await json<{ data: Array<{ amount: number }> }>(
       "GET",
-      `/transactions?accountId=${accountId}&amountMin=0`,
+      `/transactions?accountIds=${accountId}&amountMin=0`,
     );
     expect(minOnly.status).toBe(200);
     expect(minOnly.data.data.map((row) => row.amount)).toEqual([3200]);
 
     const maxOnly = await json<{ data: Array<{ amount: number }> }>(
       "GET",
-      `/transactions?accountId=${accountId}&amountMax=-20`,
+      `/transactions?accountIds=${accountId}&amountMax=-20`,
     );
     expect(maxOnly.status).toBe(200);
     expect(maxOnly.data.data.map((row) => row.amount)).toEqual([-82.5]);
   });
 
-  it("GET /api/transactions — filters by accountId", async () => {
+  it("GET /api/transactions — filters by accountIds", async () => {
     const { status, data } = await json<{ data: Array<{ accountId: string }> }>(
       "GET",
-      `/transactions?accountId=${accountId}`,
+      `/transactions?accountIds=${accountId}`,
     );
     expect(status).toBe(200);
     for (const txn of data.data) {
@@ -893,7 +893,7 @@ describe("Transactions", () => {
     }
   });
 
-  it("GET /api/transactions — filters by accountIds and prefers them over accountId", async () => {
+  it("GET /api/transactions — filters by multiple accountIds", async () => {
     const otherAccountLabel = trackAccount(
       uniqueLabel("Transactions Filter Secondary"),
     );
@@ -916,19 +916,16 @@ describe("Transactions", () => {
     const combined = await json<{
       data: Array<{ accountId: string }>;
       total: number;
-    }>(
-      "GET",
-      `/transactions?accountId=${accountId}&accountIds=${otherAccountId}`,
-    );
+    }>("GET", `/transactions?accountIds=${accountId},${otherAccountId}`);
     expect(combined.status).toBe(200);
-    expect(combined.data.total).toBe(2);
-    expect(combined.data.data).toHaveLength(2);
-    for (const txn of combined.data.data) {
-      expect(txn.accountId).toBe(otherAccountId);
-    }
+    expect(combined.data.total).toBe(5);
+    expect(combined.data.data).toHaveLength(5);
+    expect(new Set(combined.data.data.map((txn) => txn.accountId))).toEqual(
+      new Set([accountId, otherAccountId]),
+    );
   });
 
-  it("GET /api/transactions — treats a single accountIds value like accountId", async () => {
+  it("GET /api/transactions — filters by a single accountIds value", async () => {
     const singleAccountIds = await json<{
       data: Array<{ accountId: string }>;
     }>("GET", `/transactions?accountIds=${accountId}`);
@@ -951,7 +948,7 @@ describe("Transactions", () => {
   it("GET /api/transactions — filters by date range", async () => {
     const { status, data } = await json<{ data: Array<{ date: string }> }>(
       "GET",
-      `/transactions?accountId=${accountId}&dateFrom=2025-03-01&dateTo=2025-03-31`,
+      `/transactions?accountIds=${accountId}&dateFrom=2025-03-01&dateTo=2025-03-31`,
     );
     expect(status).toBe(200);
     for (const txn of data.data) {
@@ -963,7 +960,7 @@ describe("Transactions", () => {
   it("GET /api/transactions — filters by type=expense", async () => {
     const { status, data } = await json<{ data: Array<{ amount: number }> }>(
       "GET",
-      `/transactions?accountId=${accountId}&type=expense`,
+      `/transactions?accountIds=${accountId}&type=expense`,
     );
     expect(status).toBe(200);
     for (const txn of data.data) {
@@ -974,7 +971,7 @@ describe("Transactions", () => {
   it("GET /api/transactions — filters by type=income", async () => {
     const { status, data } = await json<{ data: Array<{ amount: number }> }>(
       "GET",
-      `/transactions?accountId=${accountId}&type=income`,
+      `/transactions?accountIds=${accountId}&type=income`,
     );
     expect(status).toBe(200);
     for (const txn of data.data) {
@@ -986,7 +983,7 @@ describe("Transactions", () => {
     const { status, data } = await json<{
       data: Array<{ description: string }>;
       // Also filter by account ID to only fetch transactions uploaded in this test.
-    }>("GET", `/transactions?q=Grocery&accountId=${accountId}`);
+    }>("GET", `/transactions?q=Grocery&accountIds=${accountId}`);
     expect(status).toBe(200);
     expect(data.data.length).toBeGreaterThan(0);
     for (const txn of data.data) {
@@ -1273,7 +1270,7 @@ describe("Transactions — bulk delete", () => {
 
     const { data } = await json<{ data: Array<{ id: string }> }>(
       "GET",
-      `/transactions?accountId=${accountId}`,
+      `/transactions?accountIds=${accountId}`,
     );
     expect(data.data).toHaveLength(0);
   });
@@ -1291,7 +1288,7 @@ describe("Transactions — bulk delete", () => {
     const safeAccountId = await getAccountId(accountLabel2);
     const { data: txResult } = await json<{ data: Array<{ id: string }> }>(
       "GET",
-      `/transactions?accountId=${safeAccountId}`,
+      `/transactions?accountIds=${safeAccountId}`,
     );
     const keepId = txResult.data[0]!.id;
     const beforeCount = txResult.data.length;
@@ -1307,7 +1304,7 @@ describe("Transactions — bulk delete", () => {
 
     const after = await json<{ data: Array<{ id: string }> }>(
       "GET",
-      `/transactions?accountId=${safeAccountId}`,
+      `/transactions?accountIds=${safeAccountId}`,
     );
     expect(after.data.data).toHaveLength(beforeCount);
   });

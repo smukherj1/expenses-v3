@@ -84,7 +84,6 @@ function readTransactionSearchState(
   searchParams: URLSearchParams,
 ): TransactionSearchState {
   const accountIdsParam = searchParams.get("accountIds");
-  const legacyAccountId = searchParams.get("accountId") ?? "";
 
   return {
     q: searchParams.get("q") ?? "",
@@ -97,9 +96,7 @@ function readTransactionSearchState(
           .split(",")
           .map((part) => part.trim())
           .filter(Boolean)
-      : legacyAccountId
-        ? [legacyAccountId]
-        : [],
+      : [],
     type: (searchParams.get("type") as ListParams["type"]) ?? "",
     tags: searchParams.get("tags") ?? "",
     sort:
@@ -413,14 +410,13 @@ function TransactionsPageContent({
    * Account filter update handler.
    *
    * @param nextSelectedIds Selected account ids from the multi-select control.
-   * @sideEffect Writes accountIds to the URL, clears legacy accountId, and
-   * resets pagination to the first page.
+   * @sideEffect Writes accountIds to the URL and resets pagination to the
+   * first page.
    */
   function setAccountIds(nextSelectedIds: string[]) {
     updateSearchParams(
       {
         accountIds: nextSelectedIds,
-        accountId: undefined,
       },
       { resetPage: true },
     );

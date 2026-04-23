@@ -163,7 +163,7 @@ async function getTransactionsForAccount(accountId: string) {
       date: string;
       accountId: string;
     }>;
-  }>("GET", `/transactions?accountId=${accountId}&limit=100`);
+  }>("GET", `/transactions?accountIds=${accountId}&limit=100`);
   return data.data;
 }
 
@@ -989,7 +989,6 @@ describe("Transactions", () => {
     ]);
     const url = new URL(page.url());
     expect(url.searchParams.get("accountIds")).toBeTruthy();
-    expect(url.searchParams.get("accountId")).toBeNull();
 
     const rows = await page
       .locator('[data-testid="transaction-row"]')

@@ -23,7 +23,6 @@ export const listTransactionsSchema = z.object({
   dateTo: z.string().date().optional(),
   amountMin: z.coerce.number().optional(),
   amountMax: z.coerce.number().optional(),
-  accountId: z.string().uuid().optional(),
   accountIds: accountIdsSchema,
   tags: z.string().optional(),
   type: z.enum(["income", "expense"]).optional(),
