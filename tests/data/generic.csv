@@ -2,6 +2,6 @@ Date,Description,Amount,Currency,Account,Tags
 2015-10-16,"Haircut",-18.91,CAD,"Test Account #1","personal"
 2015-10-18,"Groceries - Loblaw's #1234",-56.78,CAD,"Test Account #1","groceries"
 2015-10-18,"McDonald's",-1.23,CAD,"Test Account #2","restaurant"
-2015-10-20,"ATM withdrawal - TD Bank",-50.0,CAD,"TD Chequing #3","misc"
+2015-10-20,"ATM withdrawal - TD Bank",-50.0,CAD,"Test Account #3","misc"
 2015-10-21,"Air Canada",-668.0,CAD,"Test Account #1","travel"
 2015-10-21,"Air Canada",-668.0,CAD,"Test Account #1","travel"
