@@ -1,6 +1,6 @@
 import { eq, and, inArray, gte, lte } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { transactions, accounts } from "../db/schema.js";
+import { transactions, accounts, transactionTags } from "../db/schema.js";
 import {
   UnsupportedCurrencyError,
   ValidationError,
@@ -9,6 +9,7 @@ import { ParsedTransaction } from "../parsers/schema.js";
 import { parseUploadFile } from "../parsers/index.js";
 import type { UploadFormat } from "../parsers/types.js";
 import { applyAllRulesToTransactions } from "./ruleService.js";
+import { getOrCreateTag } from "./tagService.js";
 
 // Transaction with fields like account ID resolved from the db.
 interface ResolvedTransaction extends ParsedTransaction {
@@ -23,6 +24,7 @@ interface ReviewTransaction {
   currency: string;
   account: string;
   duplicate: boolean;
+  tags: string[];
 }
 
 interface FinalizeUploadRow {
@@ -31,6 +33,7 @@ interface FinalizeUploadRow {
   amount: string | number;
   currency: string;
   account: string;
+  tags?: string[];
   allowDuplicate?: boolean;
 }
 
@@ -190,6 +193,7 @@ async function classifyDuplicateRows(
       currency: row.currency,
       account: row.account,
       duplicate,
+      tags: row.tags ?? [],
     };
   });
 }
@@ -214,8 +218,49 @@ async function insertUploadRows(userId: string, rows: ResolvedTransaction[]) {
     .returning({ id: transactions.id });
 
   const insertedIds = inserted.map((row) => row.id);
+  await attachUploadedTags(userId, insertedIds, rows);
   await applyAllRulesToTransactions(userId, insertedIds);
   return insertedIds;
+}
+
+async function attachUploadedTags(
+  userId: string,
+  insertedIds: string[],
+  rows: ResolvedTransaction[],
+) {
+  if (insertedIds.length === 0) {
+    return;
+  }
+
+  const tagNames = [...new Set(rows.flatMap((row) => row.tags ?? []))];
+  if (tagNames.length === 0) {
+    return;
+  }
+
+  const tagObjects = await Promise.all(
+    tagNames.map((name) => getOrCreateTag(userId, name)),
+  );
+  const tagIdByName = new Map(tagObjects.map((tag) => [tag.name, tag.id]));
+  const pairs: Array<{ transactionId: string; tagId: string }> = [];
+
+  rows.forEach((row, index) => {
+    const transactionId = insertedIds[index];
+    if (!transactionId) {
+      return;
+    }
+
+    for (const tagName of [...new Set(row.tags ?? [])]) {
+      const tagId = tagIdByName.get(tagName);
+      if (!tagId) {
+        continue;
+      }
+      pairs.push({ transactionId, tagId });
+    }
+  });
+
+  if (pairs.length > 0) {
+    await db.insert(transactionTags).values(pairs).onConflictDoNothing();
+  }
 }
 
 export async function classifyUpload(
@@ -300,6 +345,7 @@ export async function finalizeUpload(
     amount: String(row.amount),
     currency: row.currency,
     account: row.account,
+    tags: row.tags ?? [],
   }));
 
   const duplicateReviews = await classifyDuplicateRows(userId, parsedRows);

@@ -1,5 +1,10 @@
 import Papa from "papaparse";
-import { rowSchema, ParsedTransaction, ParseError } from "./schema.js";
+import {
+  rowSchema,
+  ParsedTransaction,
+  ParseError,
+  normalizeTags,
+} from "./schema.js";
 
 const DATE_COLUMNS = ["date", "Date", "Transaction Date", "Posted Date"];
 const DESCRIPTION_COLUMNS = ["description", "Description", "Memo", "Name"];
@@ -8,6 +13,7 @@ const DEBIT_COLUMNS = ["Debit", "debit"];
 const CREDIT_COLUMNS = ["Credit", "credit"];
 const CURRENCY_COLUMNS = ["currency", "Currency"];
 const ACCOUNT_COLUMNS = ["account", "Account", "Account Name"];
+const TAGS_COLUMNS = ["tags", "Tags", "Tag", "tag"];
 
 function findColumn(row: Record<string, string>, candidates: string[]) {
   for (const key of candidates) {
@@ -68,12 +74,20 @@ export function parseCsv(content: string): {
       continue;
     }
 
+    const tagsKey = findColumn(row, TAGS_COLUMNS);
+    const tags = [];
+    if (tagsKey) {
+      const rawTags = row[tagsKey].split(",");
+      tags.push(...normalizeTags(rawTags));
+    }
+
     const parsedRow = rowSchema.safeParse({
       date,
       description,
       amount,
       currency,
       account: row[accountKey]!.trim(),
+      tags,
     });
 
     if (!parsedRow.success) {

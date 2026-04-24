@@ -16,13 +16,7 @@ export function parseJson(content: string): {
   for (let i = 0; i < parsed.length; i++) {
     const result = rowSchema.safeParse(parsed[i]);
     if (result.success) {
-      transactions.push({
-        date: result.data.date,
-        description: result.data.description,
-        amount: result.data.amount,
-        currency: result.data.currency,
-        account: result.data.account,
-      });
+      transactions.push(result.data);
     } else {
       errors.push({ row: i + 1, message: result.error.message });
     }

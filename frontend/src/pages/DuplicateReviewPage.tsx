@@ -70,6 +70,7 @@ function buildReviewRows(rows: UploadRow[]): TransactionListRow[] {
     amount: row.amount,
     currency: row.currency,
     accountLabel: row.account,
+    tags: row.tags ?? [],
     duplicate: row.duplicate,
     included: !row.duplicate,
   }));
@@ -95,6 +96,7 @@ function buildFinalizeRows(
       amount: row.amount,
       currency: row.currency,
       account: row.account,
+      tags: row.tags ?? [],
       allowDuplicate: row.duplicate ? true : undefined,
     }));
 }

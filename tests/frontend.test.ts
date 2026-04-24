@@ -116,18 +116,39 @@ function readFixture(name: string): string {
   return readFileSync(new URL(`./data/${name}`, import.meta.url), "utf8");
 }
 
+function escapeCsvValue(value: string): string {
+  if (/[",\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
 function makeCsv(
   rows: Array<{
     date: string;
     description: string;
     amount: number | string;
     account: string;
+    tags?: string[];
   }>,
 ) {
-  const header = "date,description,amount,currency,account";
-  const lines = rows.map(
-    (r) => `${r.date},${r.description},${String(r.amount)},CAD,${r.account}`,
-  );
+  const includeTags = rows.some((row) => row.tags !== undefined);
+  const header = includeTags
+    ? "date,description,amount,currency,account,tags"
+    : "date,description,amount,currency,account";
+  const lines = rows.map((r) => {
+    const base = [
+      r.date,
+      r.description,
+      String(r.amount),
+      "CAD",
+      r.account,
+    ].map(escapeCsvValue);
+    if (!includeTags) {
+      return base.join(",");
+    }
+    return [...base, escapeCsvValue((r.tags ?? []).join(","))].join(",");
+  });
   return [header, ...lines].join("\n");
 }
 
@@ -137,6 +158,7 @@ async function seedCsvRows(
     description: string;
     amount: number | string;
     account: string;
+    tags?: string[];
   }>,
   filename = `seed-${crypto.randomUUID()}.csv`,
 ) {
@@ -162,9 +184,29 @@ async function getTransactionsForAccount(accountId: string) {
       amount: number;
       date: string;
       accountId: string;
+      createdAt?: string;
     }>;
   }>("GET", `/transactions?accountIds=${accountId}&limit=100`);
   return data.data;
+}
+
+async function getTransactionDetailByAccountAndDescription(
+  accountId: string,
+  description: string,
+) {
+  const rows = await getTransactionsForAccount(accountId);
+  const row = [...rows]
+    .filter((txn) => txn.description === description)
+    .sort((left, right) =>
+      String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")),
+    )[0];
+  if (!row) {
+    throw new Error(`Transaction not found: ${description}`);
+  }
+  return apiJson<{ id: string; tags: string[] }>(
+    "GET",
+    `/transactions/${row.id}`,
+  );
 }
 
 async function getAccountIdByLabel(label: string): Promise<string> {
@@ -480,10 +522,11 @@ describe("Upload", () => {
     const csvAccountLabel = trackAccount(
       uniqueLabel("E2E Upload Accept Duplicate"),
     );
+    const duplicateDescription = `Supermarket ${crypto.randomUUID().slice(0, 8)}`;
     await seedCsvRows([
       {
         date: "2025-06-01",
-        description: "Supermarket",
+        description: duplicateDescription,
         amount: -45.0,
         account: csvAccountLabel,
       },
@@ -491,15 +534,17 @@ describe("Upload", () => {
     const csv = makeCsv([
       {
         date: "2025-06-01",
-        description: "Supermarket",
+        description: duplicateDescription,
         amount: -45.0,
         account: csvAccountLabel,
+        tags: ["personal", "backup", "personal"],
       },
       {
         date: "2025-06-04",
         description: "Book Store",
         amount: -24.0,
         account: csvAccountLabel,
+        tags: ["books"],
       },
     ]);
     const outcome = await uploadAndWaitForOutcome(page, {
@@ -520,6 +565,13 @@ describe("Upload", () => {
         .textContent()) ?? "";
     expect(resultText).toContain("Inserted: 2");
     expect(resultText).toContain("Duplicates: 1");
+
+    const accountId = await getAccountIdByLabel(csvAccountLabel);
+    const detail = await getTransactionDetailByAccountAndDescription(
+      accountId,
+      duplicateDescription,
+    );
+    expect([...detail.tags].sort()).toEqual(["personal", "backup"].sort());
   });
 
   it("paginates duplicate review rows on the client", async () => {

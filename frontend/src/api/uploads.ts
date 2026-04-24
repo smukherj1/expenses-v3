@@ -19,6 +19,7 @@ export interface UploadRow {
   currency: string;
   account: string;
   duplicate: boolean;
+  tags: string[];
 }
 
 export interface UploadCompletedResult {
@@ -48,6 +49,7 @@ export interface FinalizeUploadRow {
   amount: number;
   currency: string;
   account: string;
+  tags: string[];
   allowDuplicate?: boolean;
 }
 

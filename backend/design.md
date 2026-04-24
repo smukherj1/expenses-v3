@@ -21,10 +21,10 @@ Base path: `/api`
 
 ### Uploads
 
-| Method | Path                    | Description                                                                                             |
-| ------ | ----------------------- | ------------------------------------------------------------------------------------------------------- |
-| POST   | `/api/uploads`          | Classify selected-format upload file (multipart/form-data), create immediately when no duplicates exist |
-| POST   | `/api/uploads/finalize` | Finalize reviewed rows from JSON payload, optionally allowing duplicates per row                        |
+| Method | Path                    | Description                                                                                                                             |
+| ------ | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/uploads`          | Classify selected-format upload file (multipart/form-data), preserve optional generic tags, create immediately when no duplicates exist |
+| POST   | `/api/uploads/finalize` | Finalize reviewed rows from JSON payload, preserving optional tags and optionally allowing duplicates per row                           |
 
 ### Transactions
 
@@ -171,9 +171,10 @@ Catches errors and returns structured JSON:
    - `description`: non-empty string.
    - `amount`: valid number.
    - `currency`: must be `'CAD'` (or absent, defaults to `'CAD'`). Reject entire file if any row has a non-CAD currency.
+   - Generic CSV / JSON rows may include optional tags, which are normalized to trimmed, deduplicated arrays.
 5. Classify duplicates against the current database using `(date, amount, description, account)`.
 6. If duplicates exist, return `status: "needs_review"` with parsed rows and duplicate flags.
-7. If no duplicates exist, bulk-insert `accounts` rows for new accounts, insert `transactions`, apply auto-tag rules, and return `status: "completed"`.
+7. If no duplicates exist, bulk-insert `accounts` rows for new accounts, insert `transactions`, attach uploaded tags, apply auto-tag rules, and return `status: "completed"`.
 8. No upload-review records or pending draft state are stored server-side.
 
 Completed response:
@@ -209,14 +210,15 @@ Review response:
 2. Validate each row and reject non-CAD currencies.
 3. Recompute duplicate status against the current database.
 4. Reject any duplicate row unless it includes `allowDuplicate: true`.
-5. Create any missing accounts, insert the selected rows, and apply auto-tag rules to inserted transactions only.
+5. Create any missing accounts, insert the selected rows, attach uploaded tags, and apply auto-tag rules to inserted transactions only.
 6. Return `{ status: "completed", inserted: N, duplicates: N }`.
 
 ### Duplicate Review Contract
 
 - The backend remains stateless during review; there is no persisted upload draft or review session.
 - `POST /api/uploads` may return a large `needs_review` payload, and the frontend paginates it client-side on `/upload/duplicates`.
-- The frontend is responsible for remembering the user'"'"'s review decisions until finalize is submitted.
+- The frontend is responsible for remembering the user's review decisions until finalize is submitted.
+- Review rows include uploaded generic tags so the client can round-trip them through finalization.
 
 ### `GET /api/transactions`
 

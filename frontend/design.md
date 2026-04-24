@@ -154,12 +154,13 @@ format: generic_csv | generic_json | td_canada | rbc_canada | amex_canada | cibc
 accountLabel: string, only required for institution CSV formats
 ```
 
-5. If no duplicates exist, backend inserts the rows immediately and returns `status: "completed"` plus the selected `format`.
-6. If duplicates exist, backend returns `status: "needs_review"` with parsed rows, duplicate flags, and the selected `format`.
-7. Frontend saves the review payload, navigates to `/upload/duplicates`, and renders a paginated review table.
-8. The review page defaults to ascending date order in component state, applies duplicate visibility filtering, sorts the in-memory rows, then slices the current client-side page.
-9. User changes duplicate decisions and finalizes from the review page. Non-duplicate rows are included by default and disabled in the table; duplicate decisions remain keyed by row number so filtering, sorting, and pagination do not lose them.
-10. Frontend sends the included normalized rows to `POST /api/uploads/finalize`, then renders the completion summary.
+5. Generic uploads may carry optional row tags. The backend preserves them on immediate inserts and includes them in review rows; institution uploads remain tag-free at upload time.
+6. If no duplicates exist, backend inserts the rows immediately and returns `status: "completed"` plus the selected `format`.
+7. If duplicates exist, backend returns `status: "needs_review"` with parsed rows, duplicate flags, and the selected `format`.
+8. Frontend saves the review payload, navigates to `/upload/duplicates`, and renders a paginated review table.
+9. The review page defaults to ascending date order in component state, applies duplicate visibility filtering, sorts the in-memory rows, then slices the current client-side page.
+10. User changes duplicate decisions and finalizes from the review page. Non-duplicate rows are included by default and disabled in the table; duplicate decisions remain keyed by row number so filtering, sorting, and pagination do not lose them.
+11. Frontend sends the included normalized rows, including any uploaded tags, to `POST /api/uploads/finalize`, then renders the completion summary.
 
 Institution-format UX rules:
 
@@ -168,6 +169,7 @@ Institution-format UX rules:
 - Free-form account labels remain supported so users can create a new account at upload time.
 - The upload page should explain that expenses are stored as negative amounts and that American Express Canada charges are inverted during import.
 - Payments, credits, refunds, and transfers are imported rather than removed; filtering belongs in transactions and analytics.
+- The duplicate review table does not need special tag-editing UI; it only has to preserve uploaded tags in the client payload.
 
 ### Transaction Search Flow
 

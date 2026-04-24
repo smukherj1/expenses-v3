@@ -35,6 +35,7 @@ type CsvRow = {
   description: string;
   amount: string | number;
   account: string;
+  tags?: string[];
 };
 
 type UploadFormat =
@@ -49,12 +50,36 @@ function readFixture(name: string): string {
   return readFileSync(new URL(`./data/${name}`, import.meta.url), "utf8");
 }
 
+function escapeCsvValue(value: string): string {
+  if (/[",\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function sortStrings(values: readonly string[]) {
+  return [...values].sort();
+}
+
 /** Build a minimal well-formed CSV for upload tests. Dates must be yyyy-mm-dd. */
 function makeCsv(rows: CsvRow[]) {
-  const header = "date,description,amount,currency,account";
-  const lines = rows.map(
-    (r) => `${r.date},${r.description},${String(r.amount)},CAD,${r.account}`,
-  );
+  const includeTags = rows.some((row) => row.tags !== undefined);
+  const header = includeTags
+    ? "date,description,amount,currency,account,tags"
+    : "date,description,amount,currency,account";
+  const lines = rows.map((r) => {
+    const base = [
+      r.date,
+      r.description,
+      String(r.amount),
+      "CAD",
+      r.account,
+    ].map(escapeCsvValue);
+    if (!includeTags) {
+      return base.join(",");
+    }
+    return [...base, escapeCsvValue((r.tags ?? []).join(","))].join(",");
+  });
   return [header, ...lines].join("\n");
 }
 
@@ -146,6 +171,7 @@ async function finalizeUpload(
     amount: string | number;
     currency?: string;
     account: string;
+    tags?: string[];
     allowDuplicate?: boolean;
   }>,
 ) {
@@ -195,6 +221,7 @@ async function seedCsvRows(
     description: string;
     amount: string | number;
     account: string;
+    tags?: string[];
   }>,
   filename = `seed-${crypto.randomUUID()}.csv`,
 ) {
@@ -213,9 +240,32 @@ async function getTransactionsForAccount(accountId: string) {
       amount: number;
       date: string;
       accountId: string;
+      createdAt?: string;
     }>;
   }>("GET", `/transactions?accountIds=${accountId}&limit=100`);
   return data.data;
+}
+
+async function getTransactionByAccountAndDescription(
+  accountId: string,
+  description: string,
+) {
+  const rows = await getTransactionsForAccount(accountId);
+  const row = [...rows]
+    .filter((txn) => txn.description === description)
+    .sort((left, right) =>
+      String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")),
+    )[0];
+  if (!row) {
+    throw new Error(
+      `Transaction not found for account ${accountId} and description ${description}`,
+    );
+  }
+  const detail = await json<{ id: string; tags: string[] }>(
+    "GET",
+    `/transactions/${row.id}`,
+  );
+  return detail.data;
 }
 
 // ── accounts ─────────────────────────────────────────────────────────────────
@@ -596,6 +646,170 @@ describe("Uploads", () => {
     expect(data.status).toBe("completed");
     expect(data.format).toBe("generic_json");
     expect(data.summary.inserted).toBe(1);
+  });
+
+  it("POST /api/uploads — preserves tags on generic CSV uploads", async () => {
+    const accountLabel = trackAccount(uniqueLabel("Uploads Tagged CSV"));
+    const tagNames = ["groceries", "food", "groceries"];
+    const description = `Tagged CSV ${crypto.randomUUID().slice(0, 8)}`;
+
+    const ruleTagName = trackTag(uniqueLabel("csv-rule-food"));
+    const ruleTag = await json<{ id: string }>("POST", "/tags", {
+      name: ruleTagName,
+    });
+    expect(ruleTag.status).toBe(201);
+    await json("POST", "/rules", {
+      tagId: ruleTag.data.id,
+      conditions: [
+        {
+          matchField: "description",
+          matchType: "contains",
+          matchValue: description,
+        },
+      ],
+    });
+
+    const res = await uploadCsv([
+      {
+        date: "2025-04-10",
+        description,
+        amount: "-18.91",
+        account: accountLabel,
+        tags: tagNames,
+      },
+    ]);
+    const data = (await res.json()) as {
+      status: string;
+      summary: { inserted: number; duplicates: number };
+    };
+
+    expect(res.status).toBe(201);
+    expect(data.status).toBe("completed");
+    expect(data.summary.inserted).toBe(1);
+
+    const accountId = await getAccountId(accountLabel);
+    const detail = await getTransactionByAccountAndDescription(
+      accountId,
+      description,
+    );
+    expect([...detail.tags].sort()).toEqual(
+      ["groceries", "food", ruleTagName].sort(),
+    );
+  });
+
+  it("POST /api/uploads — preserves tags on generic JSON uploads", async () => {
+    const accountLabel = trackAccount(uniqueLabel("Uploads Tagged JSON"));
+    const description = `Tagged JSON ${crypto.randomUUID().slice(0, 8)}`;
+    const jsonBody = JSON.stringify([
+      {
+        date: "2025-04-12",
+        description,
+        amount: "-12.34",
+        currency: "CAD",
+        account: accountLabel,
+        tags: ["travel", "backup", "travel"],
+      },
+    ]);
+    const form = new FormData();
+    form.append(
+      "file",
+      new Blob([jsonBody], { type: "application/json" }),
+      "tagged.json",
+    );
+    form.append("format", "generic_json");
+    const res = await fetch(`${API}/uploads`, { method: "POST", body: form });
+    const data = (await res.json()) as {
+      status: string;
+      summary: { inserted: number; duplicates: number };
+    };
+
+    expect(res.status).toBe(201);
+    expect(data.status).toBe("completed");
+    expect(data.summary.inserted).toBe(1);
+
+    const accountId = await getAccountId(accountLabel);
+    const detail = await getTransactionByAccountAndDescription(
+      accountId,
+      description,
+    );
+    expect([...detail.tags].sort()).toEqual(["travel", "backup"].sort());
+  });
+
+  it("POST /api/uploads — returns tags in duplicate review and finalize preserves them", async () => {
+    const accountLabel = trackAccount(uniqueLabel("Uploads Tagged Review"));
+    const description = `Tagged Review ${crypto.randomUUID().slice(0, 8)}`;
+    const uploadedTags = ["personal", "backup"];
+
+    await seedCsvRows([
+      {
+        date: "2025-04-11",
+        description,
+        amount: "-7.25",
+        account: accountLabel,
+      },
+    ]);
+
+    const reviewRes = await uploadCsv([
+      {
+        date: "2025-04-11",
+        description,
+        amount: "-7.25",
+        account: accountLabel,
+        tags: uploadedTags,
+      },
+      {
+        date: "2025-04-12",
+        description: "Non Duplicate",
+        amount: "-2.5",
+        account: accountLabel,
+        tags: ["notes"],
+      },
+    ]);
+    const reviewData = (await reviewRes.json()) as {
+      status: string;
+      transactions: Array<{ duplicate: boolean; tags: string[] }>;
+    };
+
+    expect(reviewRes.status).toBe(200);
+    expect(reviewData.status).toBe("needs_review");
+    expect(sortStrings(reviewData.transactions[0]?.tags ?? [])).toEqual(
+      sortStrings(uploadedTags),
+    );
+
+    const finalizeRes = await finalizeUpload([
+      {
+        date: "2025-04-11",
+        description,
+        amount: "-7.25",
+        account: accountLabel,
+        tags: uploadedTags,
+        allowDuplicate: true,
+      },
+      {
+        date: "2025-04-12",
+        description: "Non Duplicate",
+        amount: "-2.5",
+        account: accountLabel,
+        tags: ["notes"],
+      },
+    ]);
+    const finalizeData = finalizeRes.data as {
+      status: string;
+      inserted: number;
+      duplicates: number;
+    };
+
+    expect(finalizeRes.status).toBe(201);
+    expect(finalizeData.status).toBe("completed");
+    expect(finalizeData.inserted).toBe(2);
+    expect(finalizeData.duplicates).toBe(1);
+
+    const accountId = await getAccountId(accountLabel);
+    const detail = await getTransactionByAccountAndDescription(
+      accountId,
+      description,
+    );
+    expect(sortStrings(detail.tags)).toEqual(sortStrings(uploadedTags));
   });
 
   it("POST /api/uploads — uploads TD Canada fixture", async () => {

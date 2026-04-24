@@ -26,7 +26,8 @@ A web application that lets users upload financial transactions from bank accoun
 - Users upload one file at a time and explicitly choose the source format before submitting. The app does not auto-detect institution formats for this iteration.
 - Institution CSV uploads require a user-chosen **account label** (e.g. "TD Chequing", "CIBC Visa"). The upload page lets users select an existing account label from a dropdown to avoid typos, and also lets users type a new label when needed.
 - Generic CSV and JSON uploads use the `account` field provided by each row. They do not require a separate account label because the account is part of the generic data schema.
-- The system parses each file and extracts: **date, description, amount, currency, account**.
+- Generic CSV and JSON uploads can also include optional tags per row. Uploaded tags are preserved through duplicate review and insertion so users can round-trip tagged backups.
+- The system parses each file and extracts: **date, description, amount, currency, account**, plus optional tags for generic uploads.
 - **Currency:** Only CAD (Canadian Dollar) is accepted for now. Uploads containing other currencies are rejected. Institution CSV formats are treated as CAD-only. The schema supports multi-currency for future expansion.
 - **Amount convention:** Expenses are stored as negative amounts and income, credits, refunds, and payments are stored as positive amounts. Institution parsers normalize source-specific signs into this model. American Express Canada charges are inverted because the export presents charges as positive values.
 - Credit-card payments, bank credits, refunds, and transfers are imported rather than dropped so the database remains a source-of-truth ledger. Analytics can later exclude or filter these rows.
@@ -108,7 +109,6 @@ All charts are filterable by date range, account, and tags.
 
 ## Deferred Features
 
-- Uploading tagged data.
 - Searching for untagged data.
 - **Multi-currency:** Schema includes `currency` field; validation will be relaxed when ready.
 - **Budgets:** Set spending limits per category per month with alerts.
