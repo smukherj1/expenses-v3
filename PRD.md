@@ -108,6 +108,8 @@ All charts are filterable by date range, account, and tags.
 
 ## Deferred Features
 
+- Uploading tagged data.
+- Searching for untagged data.
 - **Multi-currency:** Schema includes `currency` field; validation will be relaxed when ready.
 - **Budgets:** Set spending limits per category per month with alerts.
 - **OAuth / SSO:** Social login providers.

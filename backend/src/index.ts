@@ -8,8 +8,11 @@ import tagRoutes from "./routes/tags.js";
 import ruleRoutes from "./routes/rules.js";
 import analyticsRoutes from "./routes/analytics.js";
 import { seedDefaultUser } from "./db/seed.js";
+import { logger } from "hono/logger";
 
 const app = new Hono();
+
+app.use(logger());
 
 app.use("*", defaultUserMiddleware);
 

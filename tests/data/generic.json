@@ -4,41 +4,47 @@
     "description": "Haircut",
     "amount": "-18.91",
     "currency": "CAD",
-    "account": "TD Chequing"
+    "account": "Test Account #1",
+    "tags": ["personal"]
   },
   {
     "date": "2015-10-18",
     "description": "Groceries - Loblaw's #1234",
     "amount": "-56.78",
     "currency": "CAD",
-    "account": "BMO MasterCard"
+    "account": "Test Account #2",
+    "tags": ["groceries"]
   },
   {
     "date": "2015-10-18",
     "description": "McDonald's",
     "amount": "-1.23",
     "currency": "CAD",
-    "account": "BMO MasterCard"
+    "account": "Test Account #3",
+    "tags": ["restaurant"]
   },
   {
     "date": "2015-10-20",
     "description": "ATM withdrawal - TD Bank",
     "amount": "-50.0",
     "currency": "CAD",
-    "account": "TD Chequing"
+    "account": "Test Account #1",
+    "tags": ["misc"]
   },
   {
     "date": "2015-10-21",
     "description": "Air Canada",
     "amount": "-668.0",
     "currency": "CAD",
-    "account": "BMO MasterCard"
+    "account": "Test Account #1",
+    "tags": ["travel"]
   },
   {
     "date": "2015-10-21",
     "description": "Air Canada",
     "amount": "-668.0",
     "currency": "CAD",
-    "account": "BMO MasterCard"
+    "account": "Test Account #1",
+    "tags": ["travel"]
   }
 ]
