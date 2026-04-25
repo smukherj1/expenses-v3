@@ -84,7 +84,10 @@ export const transactionTags = pgTable(
       .notNull()
       .references(() => tags.id, { onDelete: "cascade" }),
   },
-  (t) => [primaryKey({ columns: [t.transactionId, t.tagId] })],
+  (t) => [
+    primaryKey({ columns: [t.transactionId, t.tagId] }),
+    index("transaction_tags_tag_transaction_idx").on(t.tagId, t.transactionId),
+  ],
 );
 
 export const autoTagRules = pgTable("auto_tag_rules", {

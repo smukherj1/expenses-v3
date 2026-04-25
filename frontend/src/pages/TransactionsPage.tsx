@@ -8,6 +8,7 @@ import {
 import { useSearchParams } from "react-router";
 import {
   listTransactions,
+  updateTransaction,
   bulkTag,
   bulkDeleteTransactions,
   type Transaction,
@@ -18,6 +19,7 @@ import Pagination from "../components/Pagination.tsx";
 import ConfirmDialog from "../components/ConfirmDialog.tsx";
 import AccountMultiSelect from "../components/AccountMultiSelect.tsx";
 import TransactionListTable from "../components/TransactionListTable.tsx";
+import EditableTags from "../components/EditableTags.tsx";
 import type {
   TransactionListColumn,
   TransactionListRow,
@@ -38,8 +40,8 @@ type TransactionSearchState = {
   amountMin: string;
   amountMax: string;
   accountIds: string[];
-  type: ListParams["type"] | "";
   tags: string;
+  tagStatus: "" | "tagged" | "untagged";
   sort: TransactionSortColumn;
   order: TransactionListSort["order"];
   page: number;
@@ -84,6 +86,7 @@ function readTransactionSearchState(
   searchParams: URLSearchParams,
 ): TransactionSearchState {
   const accountIdsParam = searchParams.get("accountIds");
+  const rawTagStatus = searchParams.get("tagStatus");
 
   return {
     q: searchParams.get("q") ?? "",
@@ -97,8 +100,11 @@ function readTransactionSearchState(
           .map((part) => part.trim())
           .filter(Boolean)
       : [],
-    type: (searchParams.get("type") as ListParams["type"]) ?? "",
     tags: searchParams.get("tags") ?? "",
+    tagStatus:
+      rawTagStatus === "tagged" || rawTagStatus === "untagged"
+        ? rawTagStatus
+        : "",
     sort:
       (searchParams.get("sort") as TransactionSortColumn) ??
       DEFAULT_SORT.column,
@@ -210,8 +216,11 @@ function buildListParams(
     amountMin: amountMinValue,
     amountMax: amountMaxValue,
     accountIds: state.accountIds.length > 0 ? state.accountIds : undefined,
-    type: state.type || undefined,
-    tags: state.tags || undefined,
+    tags: state.tags.trim() || undefined,
+    tagStatus:
+      state.tagStatus && (!state.tags.trim() || state.tagStatus === "tagged")
+        ? state.tagStatus
+        : undefined,
     sort: state.sort,
     order: state.order,
     page: state.page,
@@ -235,6 +244,7 @@ function buildTransactionRows(
     amount: txn.amount,
     currency: txn.currency,
     accountLabel: txn.accountLabel,
+    tags: txn.tags ?? [],
     href: `/transactions/${txn.id}`,
   }));
 }
@@ -332,10 +342,11 @@ function TransactionsPageContent({
     amountMin,
     amountMax,
     accountIds,
-    type,
     sort,
     order,
     page,
+    tags,
+    tagStatus,
   } = searchState;
 
   /**
@@ -404,6 +415,33 @@ function TransactionsPageContent({
    */
   function setParam(key: string, value: string) {
     updateSearchParams({ [key]: value });
+  }
+
+  /**
+   * Tag-name filter handler.
+   *
+   * @param value Comma-separated tag names from the search input.
+   * @sideEffect Writes the tag filter to the URL and clears the impossible
+   * untagged status when specific tag names are entered.
+   */
+  function setTagFilter(value: string) {
+    const nextUpdates: Record<string, string | string[] | undefined> = {
+      tags: value,
+    };
+    if (value.trim() !== "" && tagStatus === "untagged") {
+      nextUpdates.tagStatus = "";
+    }
+    updateSearchParams(nextUpdates);
+  }
+
+  /**
+   * Tag presence filter handler.
+   *
+   * @param value Tagged/untagged selection from the search panel.
+   * @sideEffect Writes tagStatus to the URL.
+   */
+  function setTagStatus(value: string) {
+    updateSearchParams({ tagStatus: value });
   }
 
   /**
@@ -502,16 +540,31 @@ function TransactionsPageContent({
           onChange={setAccountIds}
         />
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Type</label>
+          <label className="block text-xs text-gray-500 mb-1">Tags</label>
+          <input
+            type="text"
+            placeholder="groceries, rent"
+            value={tags}
+            onChange={(e) => setTagFilter(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-sm w-48"
+            data-testid="filter-tags"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Tag status</label>
           <select
-            value={type}
-            onChange={(e) => setParam("type", e.target.value)}
+            value={
+              tags.trim() !== "" && tagStatus === "untagged" ? "" : tagStatus
+            }
+            onChange={(e) => setTagStatus(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-sm"
-            data-testid="filter-type"
+            data-testid="filter-tag-status"
           >
             <option value="">All</option>
-            <option value="income">Income</option>
-            <option value="expense">Expense</option>
+            <option value="tagged">Tagged</option>
+            <option value="untagged" disabled={tags.trim() !== ""}>
+              Untagged
+            </option>
           </select>
         </div>
         <button
@@ -615,6 +668,9 @@ function TransactionListActions({
       setBulkError(null);
       setSelectedIds(new Set());
       qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({ queryKey: ["transaction"] });
+      qc.invalidateQueries({ queryKey: ["tags"] });
+      qc.invalidateQueries({ queryKey: ["analytics"] });
     },
     onError: (e: Error) => setBulkError(e.message),
   });
@@ -640,6 +696,24 @@ function TransactionListActions({
       qc.invalidateQueries({ queryKey: ["transactions"] });
     },
     onError: (e: Error) => setBulkError(e.message),
+  });
+
+  const updateTagsMutation = useMutation({
+    mutationFn: ({
+      transactionId,
+      tags: nextTags,
+    }: {
+      transactionId: string;
+      tags: string[];
+    }) => updateTransaction(transactionId, { tags: nextTags }),
+    onSuccess: (_result, variables) => {
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({
+        queryKey: ["transaction", variables.transactionId],
+      });
+      qc.invalidateQueries({ queryKey: ["tags"] });
+      qc.invalidateQueries({ queryKey: ["analytics"] });
+    },
   });
 
   /**
@@ -668,6 +742,13 @@ function TransactionListActions({
     bulkMutation.mutate({ tagNames: names, action });
   }
 
+  function updateRowTags(row: TransactionListRow, nextTags: string[]) {
+    const uniqueTags = [
+      ...new Set(nextTags.map((tag) => tag.trim()).filter(Boolean)),
+    ];
+    updateTagsMutation.mutate({ transactionId: row.key, tags: uniqueTags });
+  }
+
   return (
     <>
       {selectedCount > 0 && (
@@ -677,6 +758,9 @@ function TransactionListActions({
         >
           <span className="text-sm text-blue-700 font-medium">
             {selectedCount} selected
+          </span>
+          <span className="text-xs text-blue-700/80">
+            Actions apply to rows selected on this page.
           </span>
           <input
             type="text"
@@ -739,6 +823,20 @@ function TransactionListActions({
             );
           }}
           getRowHref={(row) => row.href}
+          renderTags={(row) => (
+            <EditableTags
+              tags={row.tags ?? []}
+              onAdd={(name) => updateRowTags(row, [...(row.tags ?? []), name])}
+              onRemove={(name) =>
+                updateRowTags(
+                  row,
+                  (row.tags ?? []).filter((tag) => tag !== name),
+                )
+              }
+              disabled={updateTagsMutation.isPending}
+              testId={`transaction-tags-${row.key}`}
+            />
+          )}
           emptyMessage="No transactions found"
           testId="transaction-row"
         />

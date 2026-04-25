@@ -58,7 +58,7 @@ A `<RootLayout />` wraps all routes with the app shell (sidebar nav, header).
           │
           ├── <TransactionsPage />
           │   ├── <SearchBar />             # Description substring search input
-          │   ├── <FilterPanel />           # Date, amount, multi-account, tags, type filters
+          │   ├── <FilterPanel />           # Date, amount, multi-account, tags, tag-status filters
           │   ├── <TransactionListTable />  # Server-backed sortable, paginated table with row selection
           │   └── <SelectionActionBar />     # Appears when rows are selected; bulk tag + bulk delete
           │
@@ -169,15 +169,15 @@ Institution-format UX rules:
 - Free-form account labels remain supported so users can create a new account at upload time.
 - The upload page should explain that expenses are stored as negative amounts and that American Express Canada charges are inverted during import.
 - Payments, credits, refunds, and transfers are imported rather than removed; filtering belongs in transactions and analytics.
-- The duplicate review table does not need special tag-editing UI; it only has to preserve uploaded tags in the client payload.
+- The duplicate review table includes editable tag chips and preserves uploaded tags in the client payload.
 
 ### Transaction Search Flow
 
 1. `/transactions` normalizes missing URL params to `sort=date`, `order=asc`, `page=1`, and `limit=50`.
-2. The filter panel controls description search (`q`), date range, signed amount range, account id, transaction type, and tags.
+2. The filter panel controls description search (`q`), date range, signed amount range, account id, tag names, and tag presence.
 3. Amount filter inputs stay as strings in the UI. Empty values are omitted from API params, and an invalid min/max range disables the list query and shows an inline validation message.
 4. Account filtering uses `GET /api/accounts` to populate a multi-select popover and sends the selected ids as `accountIds`.
-5. The page calls `GET /api/transactions` through TanStack Query with `keepPreviousData` so existing rows stay visible while filters, sorts, or pages transition.
+5. The page calls `GET /api/transactions` through TanStack Query with `keepPreviousData` so existing rows stay visible while filters, sorts, or pages transition, and renders inline tag chips that can be added or removed per row.
 6. Sortable headers are date, description, amount, and account. Clicking a new column sorts ascending; clicking the active column toggles ascending/descending.
 7. Filter and sort changes reset `page=1`. If a filter or deletion leaves the current page beyond the result count, the page is clamped to the last available page.
 8. Row selection is scoped to the currently rendered server page. Bulk tag and bulk delete invalidate the transactions query and clear selection on success.
@@ -194,7 +194,7 @@ Pagination controls expose `First`, `Prev`, `Next`, and `Last` in addition to th
 ### Chart Drill-Down
 
 1. User clicks a pie slice or bar segment.
-2. App navigates to `/transactions?tag=X&dateFrom=Y&dateTo=Z` (pre-filtered).
+2. App navigates to `/transactions?tags=X&dateFrom=Y&dateTo=Z` (pre-filtered).
 
 ## Styling Approach
 

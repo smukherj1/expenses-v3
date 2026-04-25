@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import Pagination from "../components/Pagination.tsx";
 import TransactionListTable from "../components/TransactionListTable.tsx";
+import EditableTags from "../components/EditableTags.tsx";
 import {
   finalizeUpload,
   type FinalizeUploadRow,
@@ -11,6 +12,7 @@ import {
 import {
   clearUploadReviewSession,
   loadUploadReviewSession,
+  saveUploadReviewSession,
   type UploadReviewSession,
 } from "../lib/uploadReviewStore.ts";
 import {
@@ -34,6 +36,7 @@ const REVIEW_COLUMNS: TransactionListColumn[] = [
   "description",
   "amount",
   "account",
+  "tags",
   "duplicateStatus",
 ];
 const REVIEW_SORTABLE_COLUMNS: TransactionListSort["column"][] = [
@@ -289,7 +292,7 @@ export default function DuplicateReviewPage() {
   // Upload review flow: loaded once from local storage after /upload stores a
   // needs_review response. It is intentionally not updated in-place; cancel and
   // finalize clear the persisted session and leave this render path.
-  const [session] = useState<UploadReviewSession | null>(() =>
+  const [session, setSession] = useState<UploadReviewSession | null>(() =>
     loadUploadReviewSession(),
   );
 
@@ -332,6 +335,12 @@ export default function DuplicateReviewPage() {
   // retrying and set from the caught API error if the request fails.
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (session) {
+      saveUploadReviewSession(session);
+    }
+  }, [session]);
+
   const rows = useMemo(() => session?.result.transactions ?? [], [session]);
   const totalRows = rows.length;
   const duplicateCount = session?.result.summary.duplicates ?? 0;
@@ -358,6 +367,34 @@ export default function DuplicateReviewPage() {
     () => countIncludedRows(rows, selection),
     [rows, selection],
   );
+
+  /**
+   * Updates the tag list for one review row and persists the edited session.
+   *
+   * @param rowNumber Stable upload row number.
+   * @param nextTags Replacement tag names for the row.
+   * @sideEffect Updates the local review session and the persisted session copy
+   * in session storage so finalize uses the edited tags.
+   */
+  function updateReviewRowTags(rowNumber: number, nextTags: string[]) {
+    setSession((current) => {
+      if (!current) return current;
+
+      const normalizedTags = [
+        ...new Set(nextTags.map((tag) => tag.trim()).filter(Boolean)),
+      ];
+      const nextTransactions = current.result.transactions.map((row) =>
+        row.rowNumber === rowNumber ? { ...row, tags: normalizedTags } : row,
+      );
+      return {
+        ...current,
+        result: {
+          ...current.result,
+          transactions: nextTransactions,
+        },
+      };
+    });
+  }
 
   /**
    * Review decision handler.
@@ -643,6 +680,24 @@ export default function DuplicateReviewPage() {
             );
           }}
           getRowTone={reviewRowTone}
+          renderTags={(row) => (
+            <EditableTags
+              tags={row.tags ?? []}
+              onAdd={(name) =>
+                updateReviewRowTags(rowNumberFromTableRow(row), [
+                  ...(row.tags ?? []),
+                  name,
+                ])
+              }
+              onRemove={(name) =>
+                updateReviewRowTags(
+                  rowNumberFromTableRow(row),
+                  (row.tags ?? []).filter((tag) => tag !== name),
+                )
+              }
+              testId={`duplicate-review-tags-${row.key}`}
+            />
+          )}
           renderDuplicateStatus={renderDuplicateStatus}
           emptyMessage="No review rows match the current filter"
           testId="duplicate-review-row"

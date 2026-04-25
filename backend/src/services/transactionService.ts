@@ -1,16 +1,4 @@
-import {
-  eq,
-  and,
-  gte,
-  lte,
-  gt,
-  lt,
-  inArray,
-  sql,
-  asc,
-  desc,
-  SQL,
-} from "drizzle-orm";
+import { eq, and, gte, lte, inArray, sql, asc, desc, SQL } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { transactions, accounts, tags, transactionTags } from "../db/schema.js";
 import { NotFoundError } from "../middleware/errorHandler.js";
@@ -26,7 +14,7 @@ export async function listTransactions(
     amountMax?: number;
     accountIds?: string[];
     tags?: string;
-    type?: "income" | "expense";
+    tagStatus?: "tagged" | "untagged";
     sort: "date" | "amount" | "description" | "account";
     order: "asc" | "desc";
     page: number;
@@ -55,23 +43,52 @@ export async function listTransactions(
     conditions.push(lte(transactions.amount, String(params.amountMax)));
   }
 
-  if (params.type === "income") {
-    conditions.push(gt(transactions.amount, "0"));
-  } else if (params.type === "expense") {
-    conditions.push(lt(transactions.amount, "0"));
-  }
-
   if (params.q) {
     conditions.push(sql`${transactions.description} ILIKE ${`%${params.q}%`}`);
   }
 
   if (params.tags) {
-    const tagNames = params.tags.split(",").map((t) => t.trim());
+    const tagNames = [
+      ...new Set(
+        params.tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (tagNames.length > 0) {
+      const matchingTransactionIds = await db
+        .select({ transactionId: transactionTags.transactionId })
+        .from(transactionTags)
+        .innerJoin(tags, eq(transactionTags.tagId, tags.id))
+        .where(and(eq(tags.userId, userId), inArray(tags.name, tagNames)));
+
+      const tagTransactionIds = [
+        ...new Set(matchingTransactionIds.map((row) => row.transactionId)),
+      ];
+
+      if (tagTransactionIds.length === 0) {
+        conditions.push(sql`false`);
+      } else {
+        conditions.push(inArray(transactions.id, tagTransactionIds));
+      }
+    }
+  }
+
+  if (params.tagStatus === "tagged") {
     conditions.push(
-      sql`${transactions.id} IN (
-        SELECT tt.transaction_id FROM transaction_tags tt
-        JOIN tags tg ON tt.tag_id = tg.id
-        WHERE tg.name = ANY(${tagNames})
+      sql`EXISTS (
+        SELECT 1
+        FROM transaction_tags tt
+        WHERE tt.transaction_id = ${transactions.id}
+      )`,
+    );
+  } else if (params.tagStatus === "untagged") {
+    conditions.push(
+      sql`NOT EXISTS (
+        SELECT 1
+        FROM transaction_tags tt
+        WHERE tt.transaction_id = ${transactions.id}
       )`,
     );
   }
@@ -118,11 +135,32 @@ export async function listTransactions(
   ]);
 
   const total = countResult[0]?.count ?? 0;
+  const pageTransactionIds = rows.map((row) => row.id);
+  const tagsByTransactionId = new Map<string, string[]>();
+
+  if (pageTransactionIds.length > 0) {
+    const tagRows = await db
+      .select({
+        transactionId: transactionTags.transactionId,
+        name: tags.name,
+      })
+      .from(transactionTags)
+      .innerJoin(tags, eq(transactionTags.tagId, tags.id))
+      .where(inArray(transactionTags.transactionId, pageTransactionIds))
+      .orderBy(asc(transactionTags.transactionId), asc(tags.name));
+
+    for (const row of tagRows) {
+      const current = tagsByTransactionId.get(row.transactionId) ?? [];
+      current.push(row.name);
+      tagsByTransactionId.set(row.transactionId, current);
+    }
+  }
 
   return {
     data: rows.map((r) => ({
       ...r,
       amount: parseFloat(String(r.amount)),
+      tags: tagsByTransactionId.get(r.id) ?? [],
     })),
     total,
     page: params.page,

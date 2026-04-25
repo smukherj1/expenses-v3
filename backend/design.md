@@ -28,14 +28,14 @@ Base path: `/api`
 
 ### Transactions
 
-| Method | Path                            | Description                                                                                                                                                    |
-| ------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/transactions`             | Search/filter transactions (query params: `q`, `dateFrom`, `dateTo`, `amountMin`, `amountMax`, `accountIds`, `tags`, `type`, `sort`, `order`, `page`, `limit`) |
-| GET    | `/api/transactions/:id`         | Get single transaction with tags                                                                                                                               |
-| PATCH  | `/api/transactions/:id`         | Update transaction (tags, description)                                                                                                                         |
-| POST   | `/api/transactions/bulk-tag`    | `{ transactionIds[], tagNames[], action: 'add' \| 'remove' }`                                                                                                  |
-| POST   | `/api/transactions/bulk-delete` | `{ transactionIds[] }`                                                                                                                                         |
-| DELETE | `/api/transactions/:id`         | Delete transaction                                                                                                                                             |
+| Method | Path                            | Description                                                                                                                                                         |
+| ------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/transactions`             | Search/filter transactions (query params: `q`, `dateFrom`, `dateTo`, `amountMin`, `amountMax`, `accountIds`, `tags`, `tagStatus`, `sort`, `order`, `page`, `limit`) |
+| GET    | `/api/transactions/:id`         | Get single transaction with tags                                                                                                                                    |
+| PATCH  | `/api/transactions/:id`         | Update transaction (tags, description)                                                                                                                              |
+| POST   | `/api/transactions/bulk-tag`    | `{ transactionIds[], tagNames[], action: 'add' \| 'remove' }`                                                                                                       |
+| POST   | `/api/transactions/bulk-delete` | `{ transactionIds[] }`                                                                                                                                              |
+| DELETE | `/api/transactions/:id`         | Delete transaction                                                                                                                                                  |
 
 ### Tags
 
@@ -233,7 +233,7 @@ Supported filters:
 - `amountMin` / `amountMax`: inclusive signed amount bounds.
 - `accountIds`: comma-separated account ids.
 - `tags`: comma-separated tag names. Rows match when the transaction has any listed tag.
-- `type`: `income` for amounts greater than 0, `expense` for amounts less than 0.
+- `tagStatus`: `tagged` for transactions with at least one tag, `untagged` for transactions with no tags.
 
 Supported sorting:
 
@@ -242,7 +242,7 @@ Supported sorting:
 - Account sorting uses the joined account label.
 - All list queries add `transactions.id ASC` as a secondary sort to keep pagination stable when multiple rows share the primary sort value.
 
-The list response includes the joined `accountLabel` for each row and converts numeric database amounts to JavaScript numbers.
+The list response includes the joined `accountLabel` for each row, converts numeric database amounts to JavaScript numbers, and attaches a `tags: string[]` array for each page row.
 
 Returns: `{ data: Transaction[], total: number, page, limit }`.
 

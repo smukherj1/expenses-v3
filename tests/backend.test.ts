@@ -985,7 +985,7 @@ describe("Transactions", () => {
 
   it("GET /api/transactions — defaults to date ascending", async () => {
     const { status, data } = await json<{
-      data: Array<{ id: string; date: string }>;
+      data: Array<{ id: string; date: string; tags: string[] }>;
       total: number;
       page: number;
       limit: number;
@@ -1001,6 +1001,7 @@ describe("Transactions", () => {
       "2025-03-05",
       "2025-03-10",
     ]);
+    expect(Array.isArray(data.data[0]!.tags)).toBe(true);
     transactionId = data.data[0]!.id;
   });
 
@@ -1171,25 +1172,55 @@ describe("Transactions", () => {
     }
   });
 
-  it("GET /api/transactions — filters by type=expense", async () => {
-    const { status, data } = await json<{ data: Array<{ amount: number }> }>(
-      "GET",
-      `/transactions?accountIds=${accountId}&type=expense`,
-    );
+  it("GET /api/transactions — filters by tagStatus=tagged", async () => {
+    const tagName = trackTag(uniqueLabel("transactions-tag-status"));
+    await json("POST", "/transactions/bulk-tag", {
+      transactionIds: [transactionId],
+      tagNames: [tagName],
+      action: "add",
+    });
+
+    const { status, data } = await json<{
+      data: Array<{ tags: string[] }>;
+    }>("GET", `/transactions?accountIds=${accountId}&tagStatus=tagged`);
     expect(status).toBe(200);
     for (const txn of data.data) {
-      expect(txn.amount).toBeLessThan(0);
+      expect(txn.tags.length).toBeGreaterThan(0);
     }
   });
 
-  it("GET /api/transactions — filters by type=income", async () => {
-    const { status, data } = await json<{ data: Array<{ amount: number }> }>(
-      "GET",
-      `/transactions?accountIds=${accountId}&type=income`,
-    );
+  it("GET /api/transactions — filters by tagStatus=untagged", async () => {
+    const tagName = trackTag(uniqueLabel("transactions-untagged"));
+    await json("POST", "/transactions/bulk-tag", {
+      transactionIds: [transactionId],
+      tagNames: [tagName],
+      action: "add",
+    });
+
+    const { status, data } = await json<{
+      data: Array<{ tags: string[] }>;
+    }>("GET", `/transactions?accountIds=${accountId}&tagStatus=untagged`);
     expect(status).toBe(200);
     for (const txn of data.data) {
-      expect(txn.amount).toBeGreaterThan(0);
+      expect(txn.tags).toEqual([]);
+    }
+  });
+
+  it("GET /api/transactions — filters by tag name", async () => {
+    const tagName = trackTag(uniqueLabel("transactions-tag-name"));
+    await json("POST", "/transactions/bulk-tag", {
+      transactionIds: [transactionId],
+      tagNames: [tagName],
+      action: "add",
+    });
+
+    const { status, data } = await json<{
+      data: Array<{ tags: string[] }>;
+    }>("GET", `/transactions?accountIds=${accountId}&tags=${tagName}`);
+    expect(status).toBe(200);
+    expect(data.data.length).toBeGreaterThan(0);
+    for (const txn of data.data) {
+      expect(txn.tags).toContain(tagName);
     }
   });
 

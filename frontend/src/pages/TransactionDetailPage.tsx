@@ -28,6 +28,8 @@ export default function TransactionDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transaction", id] });
       qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({ queryKey: ["tags"] });
+      qc.invalidateQueries({ queryKey: ["analytics"] });
     },
   });
 

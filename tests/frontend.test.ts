@@ -411,6 +411,17 @@ async function searchTransactions(page: Page, query: string) {
   );
 }
 
+async function getFirstTransactionRowKey(page: Page): Promise<string> {
+  const rowKey = await page
+    .locator('[data-testid="transaction-row"]')
+    .first()
+    .getAttribute("data-row-key");
+  if (!rowKey) {
+    throw new Error("Missing transaction row key");
+  }
+  return rowKey;
+}
+
 // ── global browser setup ──────────────────────────────────────────────────────
 
 let browser: Browser;
@@ -985,36 +996,98 @@ describe("Transactions", () => {
     }
   });
 
-  it("filters transactions by type=expense", async () => {
+  it("renders and edits tags inline on the list page", async () => {
     await selectTransactionAccountFilters(page, accountLabel);
-    await page.locator('[data-testid="filter-type"]').selectOption("expense");
+    const rowKey = await getFirstTransactionRowKey(page);
+    const tagName = trackTag(uniqueLabel("e2e-list-inline-tag"));
+
+    await page
+      .locator(`[data-testid="transaction-tags-${rowKey}-toggle"]`)
+      .click();
+    await page
+      .locator(`[data-testid="transaction-tags-${rowKey}-input"]`)
+      .fill(tagName);
+    await page
+      .locator(`[data-testid="transaction-tags-${rowKey}-add"]`)
+      .click();
     await page.waitForFunction(
-      () =>
+      (name) =>
         Array.from(
           document.querySelectorAll('[data-testid="transaction-row"]'),
-        ).every((row) => row.textContent?.includes("-")),
-      { timeout: 5000 },
+        ).some((row) => row.textContent?.includes(name)),
+      tagName,
+      { timeout: 8000 },
     );
-    const rows = await page
-      .locator('[data-testid="transaction-row"]')
-      .allTextContents();
-    expect(rows.length).toBeGreaterThan(0);
+
+    const chipVisible = await page
+      .locator(`[aria-label="Remove tag ${tagName}"]`)
+      .first()
+      .isVisible();
+    expect(chipVisible).toBe(true);
+
+    await page.locator(`[aria-label="Remove tag ${tagName}"]`).click();
+    await page.waitForFunction(
+      (name) =>
+        Array.from(
+          document.querySelectorAll('[data-testid="transaction-row"]'),
+        ).every((row) => !row.textContent?.includes(name)),
+      tagName,
+      { timeout: 8000 },
+    );
   });
 
-  it("filters transactions by type=income", async () => {
+  it("filters transactions by tag name and tag status", async () => {
+    const taggedRows = await getTransactionsForAccount(accountId);
+    const taggedTransactionId = taggedRows[0]!.id;
+    const tagName = trackTag(uniqueLabel("e2e-list-filter-tag"));
+
+    await apiReq("POST", "/transactions/bulk-tag", {
+      transactionIds: [taggedTransactionId],
+      tagNames: [tagName],
+      action: "add",
+    });
+
+    await page.reload();
+    await page.waitForSelector('[data-testid="transaction-row"]', {
+      timeout: 10000,
+    });
     await selectTransactionAccountFilters(page, accountLabel);
-    await page.locator('[data-testid="filter-type"]').selectOption("income");
+
+    await page.locator('[data-testid="filter-tags"]').fill(tagName);
     await page.waitForFunction(
-      () =>
-        Array.from(
-          document.querySelectorAll('[data-testid="transaction-row"]'),
-        ).every((row) => row.textContent?.includes("3000")),
-      { timeout: 5000 },
+      (name) =>
+        Array.from(document.querySelectorAll('[data-testid="transaction-row"]'))
+          .length === 1 &&
+        document
+          .querySelector('[data-testid="transaction-row"]')
+          ?.textContent?.includes(name),
+      tagName,
+      { timeout: 8000 },
     );
-    const rows = await page
+    let rows = await page
       .locator('[data-testid="transaction-row"]')
       .allTextContents();
-    expect(rows.length).toBeGreaterThan(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain(tagName);
+
+    await page.locator('[data-testid="filter-tags"]').fill("");
+    await page
+      .locator('[data-testid="filter-tag-status"]')
+      .selectOption("untagged");
+    await page.waitForFunction(
+      () =>
+        Array.from(document.querySelectorAll('[data-testid="transaction-row"]'))
+          .length === 2 &&
+        Array.from(
+          document.querySelectorAll('[data-testid="transaction-row"]'),
+        ).every((row) => !row.textContent?.includes("e2e-list-filter-tag")),
+      { timeout: 8000 },
+    );
+    rows = await page
+      .locator('[data-testid="transaction-row"]')
+      .allTextContents();
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => !row.includes(tagName))).toBe(true);
   });
 
   it("filters transactions by amount range and account", async () => {

@@ -405,4 +405,5 @@ Use row-scoped locators where possible instead of globally unique tag ids.
 6. Transactions list: render tags and wire single-row tag mutations.
 7. Duplicate review: add tags column, editable review-row tag state, and local-storage persistence.
 8. Tests: add backend cases first, remove type-specific cases, then update frontend e2e cases.
-9. Update `frontend/design.md` and `backend/design.md` after implementation to remove stale statements such as "duplicate review table does not need special tag-editing UI" and transaction-list `type` filtering.
+9. Update `design.md`, `frontend/design.md` and `backend/design.md` after implementation to remove stale statements such as "duplicate review table does not need special tag-editing UI" and transaction-list `type` filtering.
+10. Update `PRD.md` with the updated user journeys supported and remove and old / non-existent product details.

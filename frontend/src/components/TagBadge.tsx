@@ -9,6 +9,7 @@ export default function TagBadge({ name, onRemove }: Props) {
       {name}
       {onRemove && (
         <button
+          type="button"
           onClick={onRemove}
           className="text-blue-500 hover:text-blue-800 leading-none"
           aria-label={`Remove tag ${name}`}

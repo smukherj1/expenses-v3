@@ -9,6 +9,7 @@ export interface Transaction {
   amount: number;
   currency: string;
   createdAt: string;
+  tags: string[];
 }
 
 export interface TransactionWithTags extends Transaction {
@@ -30,7 +31,7 @@ export interface ListParams {
   amountMax?: number;
   accountIds?: string[];
   tags?: string;
-  type?: "income" | "expense";
+  tagStatus?: "tagged" | "untagged";
   sort?: "date" | "amount" | "description" | "account";
   order?: "asc" | "desc";
   page?: number;
