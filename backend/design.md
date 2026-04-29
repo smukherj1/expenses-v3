@@ -267,6 +267,14 @@ Query params validated by Zod schema `src/schemas/rules.ts`.
 Upload a rule with one or more conditions AND-ed to decide whether to apply a tag
 to a user's transactions. To achieve OR, users create multiple rules for the same tag.
 
+Supported match types in conditions:
+
+- `contains`: Case-insensitive substring match.
+- `exact`: Case-sensitive exact string match.
+- `regex`: Regular expression match (case-insensitive).
+- `gt`: Greater than (for numeric amounts).
+- `lt`: Less than (for numeric amounts).
+
 ### `POST /api/rules/:id/apply`
 
 1. Load the rule and its conditions.
@@ -335,9 +343,9 @@ Institution uploads reject non-CAD columns or values. RBC rows with populated `U
 
 ## Auto-Tag Rule Engine (`services/ruleService.ts`)
 
-Funtionality to:
+Functionality to:
 
-- Match tagging rules on transactions.
+- Match tagging rules on transactions using multiple match types (`contains`, `exact`, `regex`, `gt`, `lt`).
 - CRUD methods on tagging rules.
 - Applying tagging rules on transactions.
 

@@ -32,7 +32,6 @@ A web application that lets users upload financial transactions from bank accoun
 - **Amount convention:** Expenses are stored as negative amounts and income, credits, refunds, and payments are stored as positive amounts. Institution parsers normalize source-specific signs into this model. American Express Canada charges are inverted because the export presents charges as positive values.
 - Credit-card payments, bank credits, refunds, and transfers are imported rather than dropped so the database remains a source-of-truth ledger. Analytics can later exclude or filter these rows.
 - Duplicate detection: warn when a transaction with the same date + amount + description already exists for that account. Uploads requiring duplicate review navigate to a dedicated review page where the user can skip all duplicates, accept all duplicates, or accept/skip duplicate rows individually or in bulk. Non-duplicate rows are included by default.
-- Upload history: users can view past uploads and delete an entire upload batch if it was incorrect.
 
 ### 2. Transaction Search & Filtering
 
@@ -42,6 +41,7 @@ A web application that lets users upload financial transactions from bank accoun
   - Amount range (min / max).
   - Account label.
   - Tags / categories (include or exclude).
+  - Tag presence: tagged (at least one tag) or untagged (no tags).
   - Transaction type: income (positive) or expense (negative).
 - Results default to ascending date order, oldest first.
 - Results are paginated and sortable by date, amount, description, or account label.
@@ -69,8 +69,10 @@ A web application that lets users upload financial transactions from bank accoun
 
 - Users can apply one or more **string tags** to any transaction (e.g. `groceries`, `rent`, `salary`).
 - Bulk tagging: select multiple transactions from search results and apply/remove tags in one action.
-- Auto-tag rules: users can define rules like "description contains 'WHOLE FOODS' -> tag `groceries`" that are applied automatically on future uploads and can be run retroactively.
-- **Rule composition:** A single auto-tag rule can have multiple conditions combined with AND (all must match). Users achieve OR logic by creating separate rules that apply the same tag.
+- Auto-tag rules: users can define rules that are applied automatically on future uploads and can be run retroactively.
+- **Rule composition:** A single auto-tag rule can have multiple conditions combined with AND (all must match).
+- **Match Types:** Supported match types include `contains`, `exact`, `regex`, `gt` (greater than), and `lt` (less than) for both descriptions and amounts.
+- Users achieve OR logic by creating separate rules that apply the same tag.
 
 ### 6. Visualization & Analytics
 
@@ -109,9 +111,9 @@ All charts are filterable by date range, account, and tags.
 
 ## Deferred Features
 
-- Searching for untagged data.
 - **Multi-currency:** Schema includes `currency` field; validation will be relaxed when ready.
 - **Budgets:** Set spending limits per category per month with alerts.
 - **OAuth / SSO:** Social login providers.
 - **OFX/QFX import:** Additional bank export formats.
 - **Mobile-first layout.**
+- **Upload history:** viewing past uploads and deleting an entire upload batch.

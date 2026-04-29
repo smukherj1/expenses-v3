@@ -70,10 +70,10 @@ Key capabilities:
 
 ### Data model highlights
 
-- 8 tables: `users`, `accounts`, `uploads`, `transactions`, `tags`, `transaction_tags`, `auto_tag_rules`, `auto_tag_rule_conditions`
+- 7 tables: `users`, `accounts`, `transactions`, `tags`, `transaction_tags`, `auto_tag_rules`, `auto_tag_rule_conditions`
 - A default user is seeded; all requests use a hardcoded user ID until auth is added
 - Transaction list indexes support user/date and account lookups; description search currently uses case-insensitive substring matching
-- Only CAD currency accepted for now (enforced at parse + DB level)
+- Only CAD currency accepted for now (enforced at parse level)
 
 ## Cross-Cutting Concerns
 
@@ -125,7 +125,4 @@ The canonical amount convention is:
 
 ### Currency Validation
 
-The backend rejects any transaction where `currency !== 'CAD'`. This is enforced at:
-
-1. File parsing stage (reject files with non-CAD currencies).
-2. Database level (CHECK constraint).
+The backend rejects any transaction where `currency !== 'CAD'`. This is enforced at the file parsing stage (reject files with non-CAD currencies).

@@ -47,7 +47,7 @@ A `<RootLayout />` wraps all routes with the app shell (sidebar nav, header).
           │   ├── <AccountLabelCombobox />  # Existing-account dropdown plus free-form entry for institution imports
           │   ├── <FileDropzone />          # Drag & drop / file picker
           │   ├── <UploadStatus />          # Immediate success or error summary
-          │   └── <UploadReviewStore />     # Saves needs_review payload before navigation
+          │   └── <UploadReviewStore />     # Persists needs_review payload in sessionStorage for cross-page navigation
           │
           ├── <DuplicateReviewPage />
           │   ├── <DuplicateReviewSummary /> # Upload summary + decision counts
